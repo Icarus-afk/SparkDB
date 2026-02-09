@@ -1,0 +1,11 @@
+vaultlite
+main-shm
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.dec
+backups/
+vaultlite.crt
+vaultlite.key
+.vscode/
