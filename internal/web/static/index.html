@@ -34,11 +34,22 @@
   <div class="layout">
     <aside>
       <div class="sidebar-section">
-        <div class="sidebar-title">Databases</div>
+        <div class="sidebar-title">
+          <span>Databases</span>
+          <button class="sidebar-action" id="refresh-dbs" title="Refresh databases">&#x21bb;</button>
+          <button class="sidebar-action" id="new-db-btn" title="Create database">+</button>
+        </div>
         <div id="db-list"></div>
+        <div id="new-db-form" style="display:none" class="inline-form">
+          <input type="text" id="new-db-input" placeholder="db name">
+          <button id="new-db-submit">Create</button>
+        </div>
       </div>
       <div class="sidebar-section">
-        <div class="sidebar-title">Tables</div>
+        <div class="sidebar-title">
+          <span>Tables</span>
+          <button class="sidebar-action" id="refresh-tables" title="Refresh tables">&#x21bb;</button>
+        </div>
         <div id="table-list"><span class="muted">(select a database)</span></div>
       </div>
     </aside>
@@ -54,6 +65,7 @@
         </div>
       </div>
       <div id="error-box" class="error-msg" style="display:none"></div>
+      <div id="row-count" class="row-count" style="display:none"></div>
       <div id="results-wrapper"><div id="results-area"></div></div>
     </main>
   </div>

@@ -1,9 +1,13 @@
 package database
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 
 	_ "modernc.org/sqlite"
@@ -139,6 +143,31 @@ func (m *Manager) List() []string {
 	return names
 }
 
+var sqliteMagic = []byte("SQLite format 3\x00")
+
+func isSQLiteFile(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	var header [16]byte
+	if _, err := io.ReadFull(f, header[:]); err != nil {
+		return false
+	}
+	return bytes.Equal(header[:], sqliteMagic)
+}
+
+var skipExts = map[string]bool{
+	".go": true, ".md": true, ".txt": true, ".json": true,
+	".yml": true, ".yaml": true, ".toml": true, ".mod": true,
+	".sum": true, ".crt": true, ".key": true, ".pem": true,
+	".js": true, ".css": true, ".html": true, ".xml": true,
+	".zip": true, ".tar": true, ".gz": true, ".png": true,
+	".jpg": true, ".jpeg": true, ".gif": true, ".svg": true,
+	".ico": true, ".pdf": true, ".log": true, ".bak": true,
+}
+
 func (m *Manager) ListAll() []string {
 	seen := make(map[string]bool)
 	for name := range m.dbs {
@@ -151,19 +180,31 @@ func (m *Manager) ListAll() []string {
 				continue
 			}
 			name := e.Name()
+
 			if name == "sparkdb_system.db" || name == "sparkdb_system.db-wal" || name == "sparkdb_system.db-shm" {
 				continue
 			}
-			if len(name) > 4 && name[len(name)-4:] == ".dec" {
+			if strings.HasPrefix(name, ".") {
 				continue
 			}
-			if len(name) > 4 && (name[len(name)-4:] == "-wal" || name[len(name)-4:] == "-shm") {
+			if strings.HasSuffix(name, "-wal") || strings.HasSuffix(name, "-shm") || strings.HasSuffix(name, "-journal") {
 				continue
 			}
-			if len(name) > 5 && name[len(name)-5:] == "-journal" {
+			if strings.HasSuffix(name, ".dec") {
 				continue
 			}
-			seen[name] = true
+
+			ext := filepath.Ext(name)
+			if ext != "" && ext != ".db" && ext != ".sqlite" && ext != ".sqlite3" {
+				if skipExts[ext] {
+					continue
+				}
+			}
+
+			fullPath := m.dataDir + "/" + name
+			if isSQLiteFile(fullPath) {
+				seen[name] = true
+			}
 		}
 	}
 	names := make([]string, 0, len(seen))
