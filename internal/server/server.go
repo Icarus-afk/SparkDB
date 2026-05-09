@@ -18,6 +18,7 @@ import (
 	"sparkdb/internal/monitor"
 	"sparkdb/internal/query"
 	"sparkdb/internal/rbac"
+	"sparkdb/internal/web"
 	"sparkdb/pkg/api"
 )
 
@@ -115,6 +116,7 @@ func New(cfg *config.Config) (*Server, error) {
 	mux.Handle("GET /stats", requireAuth(http.HandlerFunc(handler.HandleStats)))
 	mux.Handle("GET /metrics", http.HandlerFunc(handler.HandlePrometheus))
 
+	mux.Handle("GET /", web.NewHandler())
 
 	var h http.Handler = mux
 	h = loggingMiddleware(h)

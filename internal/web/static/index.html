@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SparkDB</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">SparkDB</div>
+    <div class="login-subtitle">Web Console</div>
+    <input type="text" id="login-user" placeholder="Username" autocomplete="username" autofocus>
+    <input type="password" id="login-pass" placeholder="Password" autocomplete="current-password">
+    <div id="login-error" class="error-msg"></div>
+    <button id="login-btn">Sign In</button>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <header>
+    <div class="header-left">
+      <span class="brand">SparkDB</span>
+      <span class="brand-sep">|</span>
+      <span class="brand-sub">Web Console</span>
+    </div>
+    <div class="header-right">
+      <span id="user-label" class="user-badge"></span>
+      <button id="logout-btn">Sign Out</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside>
+      <div class="sidebar-section">
+        <div class="sidebar-title">Databases</div>
+        <div id="db-list"></div>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-title">Tables</div>
+        <div id="table-list"><span class="muted">(select a database)</span></div>
+      </div>
+    </aside>
+
+    <main>
+      <div class="query-bar">
+        <div class="db-indicator">db: <span id="current-db">main</span></div>
+        <textarea id="query-input" rows="4" placeholder="Enter SQL query…" spellcheck="false"></textarea>
+        <div class="query-actions">
+          <button id="run-btn">Run</button>
+          <button id="clear-btn">Clear</button>
+          <span id="query-time" class="time-badge"></span>
+        </div>
+      </div>
+      <div id="error-box" class="error-msg" style="display:none"></div>
+      <div id="results-wrapper"><div id="results-area"></div></div>
+    </main>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
