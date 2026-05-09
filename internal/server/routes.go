@@ -13,6 +13,7 @@ import (
 	"sparkdb/internal/monitor"
 	"sparkdb/internal/query"
 	"sparkdb/internal/rbac"
+	"sparkdb/internal/replication"
 	"sparkdb/pkg/api"
 )
 
@@ -23,6 +24,7 @@ type Handler struct {
 	systemDB      *database.SystemDB
 	backupMgr     *backup.Manager
 	monitor       *monitor.Monitor
+	replEngine    *replication.Engine
 }
 
 func NewHandler(executor *database.Executor, authenticator *auth.Authenticator, systemDB *database.SystemDB, backupMgr *backup.Manager, mon *monitor.Monitor) *Handler {
@@ -73,6 +75,12 @@ func (h *Handler) HandleQuery(w http.ResponseWriter, r *http.Request) {
 	dbName := req.Database
 	if dbName == "" {
 		dbName = "main"
+	}
+
+	if h.replEngine != nil && replication.IsWriteQuery(req.Query) {
+		if _, err := h.systemDB.LogReplication(dbName, req.Query); err != nil {
+			h.logAudit(user, r, req.Query, "replication_log", "failed")
+		}
 	}
 
 	res, err := h.executor.Execute(dbName, req.Query)
@@ -130,6 +138,20 @@ func (h *Handler) HandleTransaction(w http.ResponseWriter, r *http.Request) {
 	dbName := req.Database
 	if dbName == "" {
 		dbName = "main"
+	}
+
+	if h.replEngine != nil {
+		for _, q := range req.Queries {
+			q = strings.TrimSpace(q)
+			if q == "" {
+				continue
+			}
+			if replication.IsWriteQuery(q) {
+				if _, err := h.systemDB.LogReplication(dbName, q); err != nil {
+					h.logAudit(user, r, q, "replication_log_tx", "failed")
+				}
+			}
+		}
 	}
 
 	res, err := h.executor.ExecuteTransaction(dbName, req.Queries)
@@ -552,6 +574,45 @@ func (h *Handler) HandleRevealAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"api_key": rawKey})
+}
+
+func (h *Handler) HandleReplicationLog(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	if user == nil || !rbac.HasPermission(rbac.Role(user.Role), rbac.PermBackup) {
+		writeJSON(w, http.StatusForbidden, api.ErrorResponse{Error: "only admins can access replication log", Code: 403})
+		return
+	}
+
+	sinceStr := r.URL.Query().Get("since")
+	if sinceStr == "" {
+		sinceStr = "0"
+	}
+	var since int64
+	if _, err := fmt.Sscanf(sinceStr, "%d", &since); err != nil {
+		writeJSON(w, http.StatusBadRequest, api.ErrorResponse{Error: "invalid since parameter", Code: 400})
+		return
+	}
+
+	limitStr := r.URL.Query().Get("limit")
+	limit := int64(500)
+	if limitStr != "" {
+		if _, err := fmt.Sscanf(limitStr, "%d", &limit); err != nil || limit < 1 || limit > 5000 {
+			writeJSON(w, http.StatusBadRequest, api.ErrorResponse{Error: "invalid limit parameter (1-5000)", Code: 400})
+			return
+		}
+	}
+
+	entries, err := h.systemDB.GetReplicationLog(since, limit)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, api.ErrorResponse{Error: err.Error(), Code: 500})
+		return
+	}
+
+	if entries == nil {
+		entries = []*database.ReplicationEntry{}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{"entries": entries})
 }
 
 func (h *Handler) HandleListBackups(w http.ResponseWriter, r *http.Request) {

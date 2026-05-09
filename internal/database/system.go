@@ -41,6 +41,20 @@ type AuditLog struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
+type ReplicationEntry struct {
+	ID           int64     `json:"id"`
+	DatabaseName string    `json:"database_name"`
+	Query        string    `json:"query"`
+	ExecutedAt   time.Time `json:"executed_at"`
+}
+
+type ReplicationState struct {
+	Role           string    `json:"role"`
+	PrimaryURL     string    `json:"primary_url"`
+	LastAppliedID  int64     `json:"last_applied_id"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
 func NewSystemDB(path string) (*SystemDB, error) {
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
@@ -111,6 +125,21 @@ func migrate(db *sql.DB) error {
 		endpoint TEXT,
 		status TEXT,
 		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS replication_log (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		database_name TEXT NOT NULL,
+		query TEXT NOT NULL,
+		executed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS replication_state (
+		id INTEGER PRIMARY KEY CHECK (id = 1),
+		role TEXT NOT NULL DEFAULT 'standalone',
+		primary_url TEXT DEFAULT '',
+		last_applied_id INTEGER DEFAULT 0,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
@@ -358,4 +387,76 @@ func (s *SystemDB) GetAuditLogs(limit int) ([]*AuditLog, error) {
 		logs = append(logs, l)
 	}
 	return logs, nil
+}
+
+func (s *SystemDB) LogReplication(databaseName, query string) (int64, error) {
+	result, err := s.db.Exec(
+		"INSERT INTO replication_log (database_name, query) VALUES (?, ?)",
+		databaseName, query,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("log replication: %w", err)
+	}
+	return result.LastInsertId()
+}
+
+func (s *SystemDB) GetReplicationLog(since, limit int64) ([]*ReplicationEntry, error) {
+	rows, err := s.db.Query(`
+		SELECT id, database_name, query, executed_at
+		FROM replication_log
+		WHERE id > ?
+		ORDER BY id ASC
+		LIMIT ?
+	`, since, limit)
+	if err != nil {
+		return nil, fmt.Errorf("get replication log: %w", err)
+	}
+	defer rows.Close()
+
+	var entries []*ReplicationEntry
+	for rows.Next() {
+		e := &ReplicationEntry{}
+		if err := rows.Scan(&e.ID, &e.DatabaseName, &e.Query, &e.ExecutedAt); err != nil {
+			return nil, fmt.Errorf("scan replication entry: %w", err)
+		}
+		entries = append(entries, e)
+	}
+	return entries, nil
+}
+
+func (s *SystemDB) GetReplicationState() (*ReplicationState, error) {
+	row := s.db.QueryRow(`
+		SELECT role, primary_url, last_applied_id, updated_at
+		FROM replication_state WHERE id = 1
+	`)
+	st := &ReplicationState{}
+	if err := row.Scan(&st.Role, &st.PrimaryURL, &st.LastAppliedID, &st.UpdatedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return &ReplicationState{Role: "standalone", LastAppliedID: 0}, nil
+		}
+		return nil, fmt.Errorf("get replication state: %w", err)
+	}
+	return st, nil
+}
+
+func (s *SystemDB) InitReplicationState(role, primaryURL string) error {
+	_, err := s.db.Exec(`
+		INSERT INTO replication_state (id, role, primary_url, last_applied_id, updated_at)
+		VALUES (1, ?, ?, 0, CURRENT_TIMESTAMP)
+		ON CONFLICT(id) DO UPDATE SET role = excluded.role, primary_url = excluded.primary_url, updated_at = CURRENT_TIMESTAMP
+	`, role, primaryURL)
+	return err
+}
+
+func (s *SystemDB) UpdateReplicationAppliedID(id int64) error {
+	_, err := s.db.Exec(
+		"UPDATE replication_state SET last_applied_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1",
+		id,
+	)
+	return err
+}
+
+func (s *SystemDB) CleanReplicationLog(beforeID int64) error {
+	_, err := s.db.Exec("DELETE FROM replication_log WHERE id <= ?", beforeID)
+	return err
 }

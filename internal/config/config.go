@@ -8,12 +8,13 @@ import (
 )
 
 type Config struct {
-	Server     ServerConfig     `mapstructure:"server"`
-	Database   DatabaseConfig   `mapstructure:"database"`
-	Auth       AuthConfig       `mapstructure:"auth"`
-	TLS        TLSConfig        `mapstructure:"tls"`
-	Encryption EncryptionConfig `mapstructure:"encryption"`
-	Backup     BackupConfig     `mapstructure:"backup"`
+	Server      ServerConfig      `mapstructure:"server"`
+	Database    DatabaseConfig    `mapstructure:"database"`
+	Auth        AuthConfig        `mapstructure:"auth"`
+	TLS         TLSConfig         `mapstructure:"tls"`
+	Encryption  EncryptionConfig  `mapstructure:"encryption"`
+	Backup      BackupConfig      `mapstructure:"backup"`
+	Replication ReplicationConfig `mapstructure:"replication"`
 }
 
 type ServerConfig struct {
@@ -53,6 +54,13 @@ type BackupConfig struct {
 	KeepCount int    `mapstructure:"keep_count"`
 }
 
+type ReplicationConfig struct {
+	Role         string `mapstructure:"role"`
+	PrimaryURL   string `mapstructure:"primary_url"`
+	APIKey       string `mapstructure:"api_key"`
+	PollInterval int    `mapstructure:"poll_interval"`
+}
+
 func Load(path string) (*Config, error) {
 	v := viper.New()
 	v.SetConfigName("config")
@@ -77,6 +85,9 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("backup.dir", "backups")
 	v.SetDefault("backup.schedule", "")
 	v.SetDefault("backup.keep_count", 10)
+
+	v.SetDefault("replication.role", "standalone")
+	v.SetDefault("replication.poll_interval", 5)
 
 	v.SetEnvPrefix("SPARKDB")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
@@ -111,6 +122,23 @@ func Load(path string) (*Config, error) {
 		if cfg.Encryption.Key == "" && cfg.Encryption.KeyFile == "" {
 			return nil, fmt.Errorf("encryption enabled but no key or key_file provided")
 		}
+	}
+
+	switch cfg.Replication.Role {
+	case "primary", "replica", "standalone":
+	case "":
+		cfg.Replication.Role = "standalone"
+	default:
+		return nil, fmt.Errorf("invalid replication role %q: must be 'primary', 'replica', or 'standalone'", cfg.Replication.Role)
+	}
+	if cfg.Replication.Role == "replica" && cfg.Replication.PrimaryURL == "" {
+		return nil, fmt.Errorf("replica role requires primary_url")
+	}
+	if cfg.Replication.Role == "replica" && cfg.Replication.APIKey == "" {
+		return nil, fmt.Errorf("replica role requires api_key for authentication with primary")
+	}
+	if cfg.Replication.PollInterval < 1 {
+		cfg.Replication.PollInterval = 5
 	}
 
 	return &cfg, nil

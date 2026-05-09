@@ -18,6 +18,7 @@ import (
 	"sparkdb/internal/monitor"
 	"sparkdb/internal/query"
 	"sparkdb/internal/rbac"
+	"sparkdb/internal/replication"
 	"sparkdb/internal/web"
 	"sparkdb/pkg/api"
 )
@@ -28,6 +29,7 @@ type Server struct {
 	systemDB      *database.SystemDB
 	authenticator *auth.Authenticator
 	backupMgr     *backup.Manager
+	replEngine    *replication.Engine
 	cfg           *config.Config
 	tlsEnabled    bool
 	stopSched     chan struct{}
@@ -88,7 +90,13 @@ func New(cfg *config.Config) (*Server, error) {
 
 	backupMgr := backup.NewManager(cfg.Backup.Dir, cfg.Database.DataDir, dbManager, ciph)
 
+	if err := systemDB.InitReplicationState(cfg.Replication.Role, cfg.Replication.PrimaryURL); err != nil {
+		return nil, fmt.Errorf("init replication state: %w", err)
+	}
+	replEngine := replication.NewEngine(systemDB, executor, cfg.Replication.Role, cfg.Replication.PrimaryURL, cfg.Replication.APIKey, cfg.Replication.PollInterval)
+
 	handler := NewHandler(executor, authenticator, systemDB, backupMgr, mon)
+	handler.replEngine = replEngine
 
 	rateLimiter := query.NewRateLimiter(60, time.Minute)
 	requireAuth := authMiddleware(authenticator)
@@ -122,6 +130,7 @@ func New(cfg *config.Config) (*Server, error) {
 	mux.Handle("GET /databases", requireAuth(http.HandlerFunc(handler.HandleListDatabases)))
 	mux.Handle("GET /stats", requireAuth(http.HandlerFunc(handler.HandleStats)))
 	mux.Handle("GET /metrics", optionalAuth(http.HandlerFunc(handler.HandlePrometheus)))
+	mux.Handle("GET /replication/log", requireAuth(http.HandlerFunc(handler.HandleReplicationLog)))
 
 	mux.Handle("GET /", web.NewHandler())
 
@@ -181,6 +190,7 @@ func New(cfg *config.Config) (*Server, error) {
 		systemDB:      systemDB,
 		authenticator: authenticator,
 		backupMgr:     backupMgr,
+		replEngine:    replEngine,
 		cfg:           cfg,
 		tlsEnabled:    tlsEnabled,
 		stopSched:     make(chan struct{}),
@@ -202,6 +212,8 @@ func (s *Server) Start() error {
 	if s.cfg.Backup.Schedule != "" {
 		go s.scheduledBackupLoop()
 	}
+
+	s.replEngine.Start()
 
 	go func() {
 		if s.tlsEnabled {
@@ -228,6 +240,7 @@ func (s *Server) Shutdown() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	close(s.stopSched)
+	s.replEngine.Stop()
 	s.httpServer.Shutdown(ctx)
 	s.dbManager.CloseAll()
 	s.systemDB.Close()
