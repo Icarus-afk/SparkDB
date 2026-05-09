@@ -209,13 +209,37 @@ func (a *Authenticator) CreateUser(username, password, role string) (*database.U
 	return a.systemDB.CreateUser(username, hash, role)
 }
 
+func (a *Authenticator) UpdateUserRole(id int64, role string) (*database.User, error) {
+	if err := a.systemDB.UpdateUserRole(id, role); err != nil {
+		return nil, fmt.Errorf("update role: %w", err)
+	}
+	return a.systemDB.GetUser(id)
+}
+
+func (a *Authenticator) UpdateUserPassword(id int64, password string) error {
+	hash, err := HashPassword(password)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+	return a.systemDB.UpdateUserPassword(id, hash)
+}
+
+func (a *Authenticator) DeleteUser(id int64) error {
+	return a.systemDB.DeleteUser(id)
+}
+
 func (a *Authenticator) GenerateAPIKey(userID int64, name string) (string, error) {
 	rawKey, hashedKey, err := a.apiKeyMgr.Generate()
 	if err != nil {
 		return "", fmt.Errorf("generate API key: %w", err)
 	}
 
-	if err := a.systemDB.CreateAPIKey(userID, hashedKey, name, nil); err != nil {
+	prefix := rawKey
+	if len(rawKey) > 12 {
+		prefix = rawKey[:12] + "..."
+	}
+
+	if err := a.systemDB.CreateAPIKey(userID, hashedKey, name, prefix, nil); err != nil {
 		return "", fmt.Errorf("store API key: %w", err)
 	}
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"sparkdb/internal/auth"
 	"sparkdb/internal/backup"
@@ -218,16 +219,167 @@ func (h *Handler) HandleListUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type userView struct {
-		ID        int64  `json:"id"`
-		Username  string `json:"username"`
-		Role      string `json:"role"`
+		ID          int64      `json:"id"`
+		Username    string     `json:"username"`
+		Role        string     `json:"role"`
+		CreatedAt   time.Time  `json:"created_at"`
+		LockedUntil *time.Time `json:"locked_until,omitempty"`
 	}
 	view := make([]userView, 0, len(users))
 	for _, u := range users {
-		view = append(view, userView{ID: u.ID, Username: u.Username, Role: u.Role})
+		view = append(view, userView{ID: u.ID, Username: u.Username, Role: u.Role, CreatedAt: u.CreatedAt, LockedUntil: u.LockedUntil})
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{"users": view})
+}
+
+func (h *Handler) HandleUpdateUserRole(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	if user == nil || !rbac.HasPermission(rbac.Role(user.Role), rbac.PermCreateUser) {
+		writeJSON(w, http.StatusForbidden, api.ErrorResponse{Error: "only admins can modify users", Code: 403})
+		return
+	}
+
+	idStr := r.PathValue("id")
+	var id int64
+	if _, err := fmt.Sscanf(idStr, "%d", &id); err != nil {
+		writeJSON(w, http.StatusBadRequest, api.ErrorResponse{Error: "invalid user id", Code: 400})
+		return
+	}
+
+	var req struct {
+		Role string `json:"role"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, api.ErrorResponse{Error: "invalid request body", Code: 400})
+		return
+	}
+
+	if _, ok := rbac.ParseRole(req.Role); !ok {
+		writeJSON(w, http.StatusBadRequest, api.ErrorResponse{Error: "invalid role; must be one of: admin, developer, readonly, auditor", Code: 400})
+		return
+	}
+
+	updated, err := h.authenticator.UpdateUserRole(id, req.Role)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, api.ErrorResponse{Error: err.Error(), Code: 500})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"id":       updated.ID,
+		"username": updated.Username,
+		"role":     updated.Role,
+	})
+}
+
+func (h *Handler) HandleUpdateUserPassword(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	if user == nil || !rbac.HasPermission(rbac.Role(user.Role), rbac.PermCreateUser) {
+		writeJSON(w, http.StatusForbidden, api.ErrorResponse{Error: "only admins can modify users", Code: 403})
+		return
+	}
+
+	idStr := r.PathValue("id")
+	var id int64
+	if _, err := fmt.Sscanf(idStr, "%d", &id); err != nil {
+		writeJSON(w, http.StatusBadRequest, api.ErrorResponse{Error: "invalid user id", Code: 400})
+		return
+	}
+
+	var req struct {
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, api.ErrorResponse{Error: "invalid request body", Code: 400})
+		return
+	}
+
+	if req.Password == "" {
+		writeJSON(w, http.StatusBadRequest, api.ErrorResponse{Error: "password is required", Code: 400})
+		return
+	}
+
+	if err := h.authenticator.UpdateUserPassword(id, req.Password); err != nil {
+		writeJSON(w, http.StatusInternalServerError, api.ErrorResponse{Error: err.Error(), Code: 500})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "password updated"})
+}
+
+func (h *Handler) HandleDeleteUser(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	if user == nil || !rbac.HasPermission(rbac.Role(user.Role), rbac.PermCreateUser) {
+		writeJSON(w, http.StatusForbidden, api.ErrorResponse{Error: "only admins can delete users", Code: 403})
+		return
+	}
+
+	idStr := r.PathValue("id")
+	var id int64
+	if _, err := fmt.Sscanf(idStr, "%d", &id); err != nil {
+		writeJSON(w, http.StatusBadRequest, api.ErrorResponse{Error: "invalid user id", Code: 400})
+		return
+	}
+
+	if id == user.ID {
+		writeJSON(w, http.StatusBadRequest, api.ErrorResponse{Error: "cannot delete yourself", Code: 400})
+		return
+	}
+
+	if err := h.authenticator.DeleteUser(id); err != nil {
+		writeJSON(w, http.StatusInternalServerError, api.ErrorResponse{Error: err.Error(), Code: 500})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "user deleted"})
+}
+
+func (h *Handler) HandleListAPIKeys(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	if user == nil || !rbac.HasPermission(rbac.Role(user.Role), rbac.PermBackup) {
+		writeJSON(w, http.StatusForbidden, api.ErrorResponse{Error: "only admins can list API keys", Code: 403})
+		return
+	}
+
+	keys, err := h.systemDB.ListAPIKeys()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, api.ErrorResponse{Error: err.Error(), Code: 500})
+		return
+	}
+
+	if keys == nil {
+		keys = []*database.APIKey{}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{"api_keys": keys})
+}
+
+func (h *Handler) HandleDeleteAPIKey(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	if user == nil || !rbac.HasPermission(rbac.Role(user.Role), rbac.PermBackup) {
+		writeJSON(w, http.StatusForbidden, api.ErrorResponse{Error: "only admins can delete API keys", Code: 403})
+		return
+	}
+
+	idStr := r.PathValue("id")
+	if idStr == "" {
+		writeJSON(w, http.StatusBadRequest, api.ErrorResponse{Error: "id is required", Code: 400})
+		return
+	}
+
+	var id int64
+	if _, err := fmt.Sscanf(idStr, "%d", &id); err != nil {
+		writeJSON(w, http.StatusBadRequest, api.ErrorResponse{Error: "invalid id", Code: 400})
+		return
+	}
+
+	if err := h.systemDB.DeleteAPIKey(id); err != nil {
+		writeJSON(w, http.StatusInternalServerError, api.ErrorResponse{Error: err.Error(), Code: 500})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "API key deleted"})
 }
 
 func (h *Handler) HandleCreateAPIKey(w http.ResponseWriter, r *http.Request) {

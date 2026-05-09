@@ -12,9 +12,10 @@ async function api(method,path,body){
 function msg(el,t,type){el.textContent=t;el.className='msg msg-'+(type||'error');el.style.display=t?'block':'none'}
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function escJS(s){return String(s).replace(/'/g,"\\'")}
-function fmtBytes(b){if(!b)return'0B';const u=['B','KB','MB','GB'];let i=0,v=b;while(v>=1024&&i<3){v/=1024;i++}return v.toFixed(1)+u[i]}
-function fmtDur(s){if(!s)return'-';const d=Math.floor(s/86400);s%=86400;const h=Math.floor(s/3600);s%=3600;const m=Math.floor(s/60);s=Math.floor(s%60);let r='';if(d)r+=d+'d ';if(h)r+=h+'h ';if(m)r+=m+'m ';r+=s+'s';return r}
+function fmtBytes(b){if(!b)return'0 B';const u=['B','KB','MB','GB','TB'];let i=0,v=b;while(v>=1024&&i<4){v/=1024;i++}return v.toFixed(1)+' '+u[i]}
+function fmtDur(s){if(!s)return'-';const d=Math.floor(s/86400);s%=86440;const h=Math.floor(s/3600);s%=3600;const m=Math.floor(s/60);s=Math.floor(s%60);let r='';if(d)r+=d+'d ';if(h||d)r+=h+'h ';r+=m+'m '+s+'s';return r}
 function roleBadge(r){const m={admin:'admin',developer:'developer',readonly:'readonly',auditor:'auditor'};return'<span class="role-badge role-'+m[r.toLowerCase()]+'">'+esc(r)+'</span>'}
+function fmtTime(t){if(!t)return'-';const d=new Date(t);return d.toLocaleString()}
 
 // ===== Login =====
 document.getElementById('login-btn').addEventListener('click',login);
@@ -42,27 +43,97 @@ function nav(v){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   const ne=document.querySelector(`.nav-item[data-view="${v}"]`);if(ne)ne.classList.add('active');
   const ve=document.querySelector(`section[data-view="${v}"]`);if(ve)ve.classList.add('active');
-  switch(v){case'dashboard':loadDash();break;case'query':loadQDBs();break;case'databases':loadDBList();break;case'users':loadUsers();break;case'backups':loadBackups();loadBackupDBs();break;case'audit':loadAudit();break;case'stats':loadStats()}
+  switch(v){
+    case'dashboard':loadDash();break;
+    case'query':loadQDBs();break;
+    case'databases':loadDBList();break;
+    case'import':loadImpDBs();break;
+    case'users':loadUsers();break;
+    case'apikeys':loadAPIKeys();break;
+    case'backups':loadBackups();loadBackupDBs();break;
+    case'audit':loadAudit()
+  }
+}
+
+// ===== Import DBs =====
+async function loadImpDBs(){
+  const r=await api('GET','/databases');
+  const s=document.getElementById('imp-db');
+  if(!r.databases||!r.databases.length){s.innerHTML='<option>(no databases)</option>';return}
+  s.innerHTML=r.databases.map(d=>'<option value="'+escJS(d)+'">'+esc(d)+'</option>').join('')
 }
 
 // ===== Dashboard =====
+function clamp(v,min,max){return Math.min(max,Math.max(min,v))}
+function pct(v,cap){return cap>0?clamp((v/cap)*100,0,100):0}
+
+const STORAGE_COLORS=['#4a6cf7','#8b5cf6','#06b6d4','#22c55e','#f59e0b','#ec4899','#ef4444','#14b8a6'];
+
 async function loadDash(){
   const s=await api('GET','/stats');
   if(s.error)return;
-  document.getElementById('dash-uptime').textContent=fmtDur(s.uptime_seconds);
+  const dbs=s.databases||[];
   document.getElementById('dash-queries').textContent=s.total_queries||0;
+  document.getElementById('dash-memory').textContent=(s.alloc_mb||0).toFixed(1);
+  document.getElementById('dash-latency').textContent=(s.avg_latency_ms||0).toFixed(1);
   document.getElementById('dash-conns').textContent=s.active_conns||0;
-  document.getElementById('dash-memory').textContent=(s.alloc_mb||0).toFixed(1)+'M';
-  document.getElementById('dash-latency').textContent=(s.avg_latency_ms||0).toFixed(1)+'ms';
   document.getElementById('dash-goroutines').textContent=s.goroutines||0;
-  const el=document.getElementById('dash-db-sizes');
-  if(s.databases&&s.databases.length){
-    const max=Math.max(...s.databases.map(d=>d.size));
-    el.innerHTML=s.databases.map(d=>{
-      const pct=max?Math.max(2,(d.size/max)*100):2;
-      return'<div class="db-bar-row"><span class="db-bar-name">'+esc(d.name)+'</span><div class="db-bar-track"><div class="db-bar-fill" style="width:'+pct+'%"></div></div><span class="db-bar-size">'+fmtBytes(d.size)+'</span></div>'
-    }).join('')
-  }else el.innerHTML='<p class="dim">No databases</p>'
+  document.getElementById('dash-failed-logins').textContent=s.failed_logins||0;
+  document.getElementById('dash-uptime').textContent=fmtDur(s.uptime_seconds);
+  document.getElementById('dash-dbs-count').textContent=dbs.length;
+
+  const memPct=pct(s.alloc_mb||0,100);
+  const latPct=pct(s.avg_latency_ms||0,500);
+  const connPct=pct(s.active_conns||0,100);
+  const gorPct=pct(s.goroutines||0,200);
+  const failPct=pct(s.failed_logins||0,50);
+  const dbsPct=pct(dbs.length,20);
+
+  document.getElementById('dash-query-bar').style.width=pct(s.total_queries||0,5000)+'%';
+  document.getElementById('dash-mem-bar').style.width=memPct+'%';
+  document.getElementById('dash-lat-bar').style.width=latPct+'%';
+  document.getElementById('dash-conn-bar').style.width=connPct+'%';
+  document.getElementById('dash-gor-bar').style.width=gorPct+'%';
+  document.getElementById('dash-fail-bar').style.width=failPct+'%';
+  document.getElementById('dash-dbs-bar').style.width=dbsPct+'%';
+  document.getElementById('dash-mem-hint').textContent=memPct.toFixed(0)+'% of 100 MB';
+  document.getElementById('dash-lat-hint').textContent=latPct.toFixed(0)+'% of 500 ms';
+  document.getElementById('dash-conn-hint').textContent=connPct.toFixed(0)+'% of 100 max';
+  document.getElementById('dash-gor-hint').textContent=gorPct.toFixed(0)+'% of 200';
+  document.getElementById('dash-fail-hint').textContent=failPct.toFixed(0)+'% of 50 limit';
+  document.getElementById('dash-dbs-hint').textContent=dbsPct.toFixed(0)+'% of 20 max';
+
+  const dbs=s.databases||[];
+  const stackedEl=document.getElementById('dash-db-stacked');
+  const sizesEl=document.getElementById('dash-db-sizes');
+
+  if(!dbs.length){
+    stackedEl.innerHTML='';sizesEl.innerHTML='<p class="dim">No databases</p>';return
+  }
+
+  const total=dbs.reduce((a,d)=>a+d.size,0);
+  const max=Math.max(...dbs.map(d=>d.size));
+
+  if(total>0){
+    const minPct=3;
+    const segments=dbs.map((d,i)=>{
+      const rawPct=(d.size/total)*100;
+      const pctVal=Math.max(rawPct,rawPct>=1?rawPct:0);
+      const displayPct=Math.max(pctVal,rawPct>0?Math.max(rawPct,1):0);
+      return{name:d.name,size:d.size,pct:displayPct,color:STORAGE_COLORS[i%STORAGE_COLORS.length]}
+    });
+    const totalPct=segments.reduce((a,s)=>a+s.pct,0);
+    const scale=100/totalPct;
+    segments.forEach(s=>s.pct=Math.round(s.pct*scale));
+
+    stackedEl.innerHTML='<div class="storage-stacked">'+segments.map(s=>'<div class="storage-seg" style="width:'+s.pct+'%;background:'+s.color+'" title="'+esc(s.name)+': '+fmtBytes(s.size)+'">'+(s.pct>8?s.name:'')+'</div>').join('')+'</div>';
+    stackedEl.innerHTML+='<div class="storage-legend">'+segments.map(s=>'<div class="storage-leg-item"><span class="storage-leg-dot" style="background:'+s.color+'"></span>'+esc(s.name)+'<span class="storage-leg-size">'+fmtBytes(s.size)+'</span></div>').join('')+'</div>'
+  }else{stackedEl.innerHTML='<p class="dim">No storage data</p>'}
+
+  sizesEl.innerHTML=dbs.map((d,i)=>{
+    const pctVal=max?Math.max(2,(d.size/max)*100):2;
+    return'<div class="db-bar-row"><span class="db-bar-name">'+esc(d.name)+'</span><div class="db-bar-track"><div class="db-bar-fill" style="width:'+pctVal+'%;background:linear-gradient(90deg,'+STORAGE_COLORS[i%STORAGE_COLORS.length]+',#7c9aff)"></div></div><span class="db-bar-size">'+fmtBytes(d.size)+'</span></div>'
+  }).join('')
 }
 
 // ===== Query =====
@@ -70,23 +141,53 @@ async function loadQDBs(){
   const res=await api('GET','/databases');
   if(res.error)return;
   const list=document.getElementById('q-db-list');list.innerHTML='';
-  (res.databases||[]).forEach(db=>{
-    const el=document.createElement('div');el.className='q-db-item'+(db===currentDB?' active':'');el.textContent=db;
-    el.addEventListener('click',()=>{currentDB=db;document.getElementById('q-current-db').textContent=db;document.querySelectorAll('#q-db-list .q-db-item').forEach(e=>e.classList.remove('active'));document.querySelectorAll('#q-db-list .q-db-item').forEach(e=>{if(e.textContent===db)e.classList.add('active')});loadQTables()});
-    list.appendChild(el)
-  });
-  document.getElementById('q-current-db').textContent=currentDB;
-  loadQTables()
+  for(const db of (res.databases||[])){
+    const item=document.createElement('div');
+    item.className='q-db-item'+(db===currentDB?' active':'');
+    const chevron=document.createElement('span');
+    chevron.className='chevron';chevron.textContent='\u25B6';
+    item.appendChild(chevron);
+    const label=document.createTextNode(' '+db);
+    item.appendChild(label);
+    const tablesDiv=document.createElement('div');
+    tablesDiv.className='q-db-tables';
+    item.dataset.db=db;
+    item.addEventListener('click',async()=>{
+      if(item.classList.contains('active')){
+        tablesDiv.classList.toggle('open');
+        chevron.classList.toggle('open');
+        if(tablesDiv.classList.contains('open')&&!tablesDiv.children.length){
+          await loadQTablesInto(db,tablesDiv)
+        }
+      }else{
+        currentDB=db;
+        document.getElementById('q-current-db').textContent=db;
+        document.querySelectorAll('#q-db-list .q-db-item').forEach(e=>e.classList.remove('active'));
+        document.querySelectorAll('#q-db-list .q-db-tables').forEach(t=>t.classList.remove('open'));
+        document.querySelectorAll('#q-db-list .chevron').forEach(c=>c.classList.remove('open'));
+        item.classList.add('active');
+        tablesDiv.classList.add('open');
+        chevron.classList.add('open');
+        if(!tablesDiv.children.length){
+          await loadQTablesInto(db,tablesDiv)
+        }
+      }
+    });
+    list.appendChild(item);
+    list.appendChild(tablesDiv)
+  }
+  document.getElementById('q-current-db').textContent=currentDB
 }
 
-async function loadQTables(){
-  const list=document.getElementById('q-table-list');list.innerHTML='<span class="dim">loading…</span>';
-  const res=await api('POST','/query',{database:currentDB,query:"SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"});
-  list.innerHTML='';if(res.error){list.innerHTML='<span class="dim">error</span>';return}
-  if(!res.rows||!res.rows.length){list.innerHTML='<span class="dim">(none)</span>';return}
+async function loadQTablesInto(db,tablesDiv){
+  tablesDiv.innerHTML='<span class="dim" style="padding:4px 10px;font-size:10px">loading…</span>';
+  const res=await api('POST','/query',{database:db,query:"SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"});
+  tablesDiv.innerHTML='';
+  if(res.error||!res.rows||!res.rows.length){tablesDiv.innerHTML='<span class="dim" style="padding:4px 10px;font-size:10px">(none)</span>';return}
   res.rows.forEach(row=>{
     const el=document.createElement('div');el.className='q-table-item';el.textContent=row[0];
-    el.addEventListener('click',()=>showQSchema(row[0]));list.appendChild(el)
+    el.addEventListener('click',(e)=>{e.stopPropagation();showQSchema(row[0])});
+    tablesDiv.appendChild(el)
   })
 }
 
@@ -97,7 +198,7 @@ async function showQSchema(name){
   document.getElementById('q-count').style.display='none';
   document.getElementById('q-export-bar').style.display='none';
   const sql=d.rows&&d.rows[0]?d.rows[0][0]:'';
-  if(sql){const b=document.createElement('div');b.className='card';b.style.marginBottom='8px';b.style.fontFamily='var(--mono)';b.style.fontSize='11px';b.style.whiteSpace='pre-wrap';b.textContent=sql;a.appendChild(b)}
+  if(sql){const b=document.createElement('div');b.className='card';b.style.marginBottom='8px';b.style.fontFamily='var(--mono)';b.style.fontSize='11px';b.style.whiteSpace='pre-wrap';b.style.padding='12px';b.textContent=sql;a.appendChild(b)}
   if(p.rows&&p.rows.length){
     const t=document.createElement('table');t.className='tbl';
     t.innerHTML='<thead><tr><th>Column</th><th>Type</th><th>Nullable</th><th>Default</th><th>PK</th></tr></thead><tbody>'+
@@ -130,7 +231,6 @@ document.getElementById('q-run').addEventListener('click',runQuery);
 document.getElementById('q-input').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();runQuery()}});
 document.getElementById('q-clear').addEventListener('click',()=>{document.getElementById('q-input').value='';document.getElementById('q-results').innerHTML='';document.getElementById('q-msg').style.display='none';document.getElementById('q-count').style.display='none';document.getElementById('q-time').textContent='';document.getElementById('q-export-bar').style.display='none';lastCols=null;lastRows=null});
 document.getElementById('q-refresh-dbs').addEventListener('click',loadQDBs);
-document.getElementById('q-refresh-tables').addEventListener('click',loadQTables);
 document.getElementById('q-export-csv').addEventListener('click',()=>{if(lastCols)dl(fmtCSV(lastCols,lastRows),'export.csv','text/csv')});
 document.getElementById('q-export-json').addEventListener('click',()=>{if(lastCols)dl(fmtJSON(lastCols,lastRows,false),'export.json','application/json')});
 document.getElementById('q-export-json-pretty').addEventListener('click',()=>{if(lastCols)dl(fmtJSON(lastCols,lastRows,true),'export.json','application/json')});
@@ -140,7 +240,7 @@ async function loadDBList(){
   const res=await api('GET','/databases');
   if(res.error){msg(document.getElementById('db-msg'),res.error);return}
   const tbody=document.getElementById('db-tbody');const dbs=res.databases||[];
-  if(!dbs.length){tbody.innerHTML='<tr><td colspan="3" class="dim" style="padding:20px;text-align:center">No databases</td></tr>';return}
+  if(!dbs.length){tbody.innerHTML='<tr><td colspan="3" class="dim" style="padding:24px;text-align:center">No databases</td></tr>';return}
   let h='';
   for(const db of dbs){
     const t=await api('POST','/query',{database:db,query:"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"});
@@ -149,7 +249,7 @@ async function loadDBList(){
   }
   tbody.innerHTML=h
 }
-function qSwitch(db){currentDB=db;nav('query');loadQDBs()}
+function qSwitch(db){currentDB=db;nav('query')}
 
 document.getElementById('db-create-btn').addEventListener('click',async()=>{
   const n=document.getElementById('db-create-input').value.trim();
@@ -184,20 +284,21 @@ function previewImport(){
   const p=fm==='csv'?parseCSV(raw):parseJSON(raw);
   if(!p||!p.cols.length||!p.rows.length){msg(me,'Could not parse data');return}
   impCols=p.cols;impRows=p.rows;
-  document.getElementById('imp-cur-db').textContent=currentDB;
-  let h='<div style="margin-bottom:8px;font-size:12px;color:var(--text2)">'+impRows.length+' rows, '+impCols.length+' columns in table <b>'+esc(tn)+'</b></div>';
+  const impDB=document.getElementById('imp-db').value;
+  let h='<div style="margin-bottom:8px;font-size:12px;color:var(--text2)">'+impRows.length+' rows, '+impCols.length+' columns into <b>'+esc(tn)+'</b> @ <b>'+esc(impDB)+'</b></div>';
   h+='<table class="tbl"><thead><tr>'+impCols.map(c=>'<th>'+esc(c)+'</th>').join('')+'</tr></thead><tbody>';
   impRows.slice(0,5).forEach(row=>{h+='<tr>'+impCols.map((_,i)=>{const v=row[i];return'<td class="mono">'+(v===null?'<span style="color:#94a3b8">NULL</span>':esc(v))+'</td>'}).join('')+'</tr>'});
-  if(impRows.length>5)h+='<tr><td colspan="'+impCols.length+'" style="text-align:center;color:var(--text2);font-size:11px;padding:12px">… and '+(impRows.length-5)+' more rows</td></tr>';
+  if(impRows.length>5)h+='<tr><td colspan="'+impCols.length+'" style="text-align:center;color:var(--text2);font-size:11px;padding:12px">\u2026 and '+(impRows.length-5)+' more rows</td></tr>';
   h+='</tbody></table>';pe.innerHTML=h;pe.style.display='block';document.getElementById('imp-execute-btn').disabled=false
 }
 
 async function executeImport(){
   const tn=document.getElementById('imp-table').value.trim(),me=document.getElementById('imp-msg');me.style.display='none';
+  const impDB=document.getElementById('imp-db').value;
   if(!tn||!impCols.length){msg(me,'Nothing to import');return}
   const types=impCols.map((c,i)=>inferType(impRows.map(r=>r[i])));
   const colDefs=impCols.map((c,i)=>JSON.stringify(c)+' '+types[i]).join(', ');
-  const cr=await api('POST','/query',{database:currentDB,query:"CREATE TABLE IF NOT EXISTS "+JSON.stringify(tn)+" ("+colDefs+")"});
+  const cr=await api('POST','/query',{database:impDB,query:"CREATE TABLE IF NOT EXISTS "+JSON.stringify(tn)+" ("+colDefs+")"});
   if(cr.error){msg(me,'Create table failed: '+cr.error);return}
   let ins=0;const B=100;
   for(let i=0;i<impRows.length;i+=B){
@@ -207,11 +308,27 @@ async function executeImport(){
       const t=types[j];if(t==='INTEGER'||t==='REAL')return v;
       return JSON.stringify(v)
     }).join(',')+')').join(', ');
-    const ir=await api('POST','/query',{database:currentDB,query:"INSERT INTO "+JSON.stringify(tn)+" VALUES "+lit});
+    const ir=await api('POST','/query',{database:impDB,query:"INSERT INTO "+JSON.stringify(tn)+" VALUES "+lit});
     if(ir.error){msg(me,'Insert failed at row '+(i+1)+': '+ir.error);return}
     ins+=batch.length
   }
   msg(me,'Imported '+ins+' rows into '+tn,'success');document.getElementById('imp-execute-btn').disabled=true
+}
+
+// ===== Modal =====
+function showModal(title,bodyHtml,footerHtml){
+  document.getElementById('modal-title').textContent=title;
+  document.getElementById('modal-body').innerHTML=bodyHtml;
+  document.getElementById('modal-footer').innerHTML=footerHtml||'';
+  document.getElementById('modal-overlay').style.display='flex'
+}
+function closeModal(){document.getElementById('modal-overlay').style.display='none'}
+document.getElementById('modal-close').addEventListener('click',closeModal);
+document.getElementById('modal-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeModal()});
+
+function showConfirm(msg,onYes){
+  showModal('Confirm','<p style="margin:0">'+msg+'</p>',
+    '<button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-danger" onclick="closeModal();('+onYes+')()">Confirm</button>')
 }
 
 // ===== Users =====
@@ -219,9 +336,57 @@ document.getElementById('users-show-btn').addEventListener('click',()=>{const f=
 
 async function loadUsers(){
   const r=await api('GET','/admin/users');const tb=document.getElementById('users-tbody');
-  if(r.error){tb.innerHTML='<tr><td colspan="3" class="dim" style="padding:20px;text-align:center">'+esc(r.error)+'</td></tr>';return}
-  const us=r.users||[];if(!us.length){tb.innerHTML='<tr><td colspan="3" class="dim" style="padding:20px;text-align:center">No users</td></tr>';return}
-  tb.innerHTML=us.map(u=>'<tr><td class="mono">'+u.id+'</td><td>'+esc(u.username)+'</td><td>'+roleBadge(u.role)+'</td></tr>').join('')
+  if(r.error){tb.innerHTML='<tr><td colspan="5" class="dim" style="padding:24px;text-align:center">'+esc(r.error)+'</td></tr>';return}
+  const us=r.users||[];if(!us.length){tb.innerHTML='<tr><td colspan="5" class="dim" style="padding:24px;text-align:center">No users</td></tr>';return}
+  tb.innerHTML=us.map(u=>{
+    const locked=u.locked_until?' <span style="color:var(--danger);font-size:10px;font-weight:600">LOCKED</span>':'';
+    return'<tr><td class="mono">'+u.id+'</td><td>'+esc(u.username)+locked+'</td><td>'+roleBadge(u.role)+'</td><td class="mono">'+fmtTime(u.created_at)+'</td><td class="actions" style="white-space:nowrap">'+
+      '<button class="btn-ghost btn-xs" onclick="showEditRole('+u.id+',\''+escJS(u.role)+'\')" style="margin-right:4px">Role</button>'+
+      '<button class="btn-ghost btn-xs" onclick="showResetPass('+u.id+',\''+escJS(u.username)+'\')" style="margin-right:4px">Pass</button>'+
+      '<button class="btn-ghost btn-xs" onclick="showDeleteUser('+u.id+',\''+escJS(u.username)+'\')" style="color:var(--danger)">Del</button></td></tr>'
+  }).join('')
+}
+
+function showEditRole(id,currentRole){
+  const roles=['admin','developer','readonly','auditor'];
+  const opts=roles.map(r=>'<option value="'+r+'"'+(r===currentRole?' selected':'')+'>'+r+'</option>').join('');
+  showModal('Change Role',
+    '<label class="fld-lbl">User #'+id+' — new role:</label><select id="modal-role-select">'+opts+'</select>',
+    '<button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="doEditRole('+id+')">Save</button>')
+}
+async function doEditRole(id){
+  const role=document.getElementById('modal-role-select').value;
+  closeModal();
+  const r=await api('PUT','/admin/users/'+id+'/role',{role});
+  if(r.error){showModal('Error','<p>'+esc(r.error)+'</p>','<button class="btn btn-primary" onclick="closeModal()">OK</button>');return}
+  loadUsers()
+}
+
+function showResetPass(id,username){
+  showModal('Reset Password for "'+username+'"',
+    '<label class="fld-lbl">New password (min 4 characters):</label><input type="password" id="modal-pass-input" placeholder="Enter new password"><div id="modal-pass-msg" class="msg msg-error" style="display:none;margin-top:8px"></div>',
+    '<button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="doResetPass('+id+')">Save</button>');
+  setTimeout(()=>document.getElementById('modal-pass-input').focus(),100)
+}
+async function doResetPass(id){
+  const pass=document.getElementById('modal-pass-input').value;
+  if(!pass||pass.length<4){msg(document.getElementById('modal-pass-msg'),'Password must be at least 4 characters');return}
+  closeModal();
+  const r=await api('PUT','/admin/users/'+id+'/password',{password:pass});
+  if(r.error){showModal('Error','<p>'+esc(r.error)+'</p>','<button class="btn btn-primary" onclick="closeModal()">OK</button>');return}
+  showModal('Done','<p>Password updated successfully.</p>','<button class="btn btn-primary" onclick="closeModal()">OK</button>')
+}
+
+function showDeleteUser(id,username){
+  showModal('Delete User',
+    '<p>Are you sure you want to delete <strong>'+esc(username)+'</strong> (ID: '+id+')?</p><p style="color:var(--danger);font-weight:600">This cannot be undone!</p>',
+    '<button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-danger" onclick="doDeleteUser('+id+')">Delete</button>')
+}
+async function doDeleteUser(id){
+  closeModal();
+  const r=await api('DELETE','/admin/users/'+id);
+  if(r.error){showModal('Error','<p>'+esc(r.error)+'</p>','<button class="btn btn-primary" onclick="closeModal()">OK</button>');return}
+  loadUsers()
 }
 
 document.getElementById('users-create-btn').addEventListener('click',async()=>{
@@ -234,50 +399,104 @@ document.getElementById('users-create-btn').addEventListener('click',async()=>{
   document.getElementById('users-form').style.display='none';loadUsers()
 });
 
+// ===== API Keys =====
+document.getElementById('apikey-create-btn').addEventListener('click',showCreateAPIKey);
+
+async function loadAPIKeys(){
+  const r=await api('GET','/auth/api-keys');const tb=document.getElementById('apikey-tbody');
+  document.getElementById('apikey-msg').style.display='none';
+  if(r.error){tb.innerHTML='<tr><td colspan="4" class="dim" style="padding:24px;text-align:center">'+esc(r.error)+'</td></tr>';return}
+  const ks=r.api_keys||[];if(!ks.length){tb.innerHTML='<tr><td colspan="4" class="dim" style="padding:24px;text-align:center">No API keys</td></tr>';return}
+  tb.innerHTML=ks.map(k=>'<tr><td><strong>'+esc(k.name)+'</strong></td><td class="mono">'+esc(k.prefix||'(legacy)')+'</td><td class="mono">'+fmtTime(k.created_at)+'</td><td class="actions"><button class="btn-ghost btn-xs" onclick="showDeleteAPIKey('+k.id+',\''+escJS(k.name)+'\')">Delete</button></td></tr>').join('')
+}
+
+function showCreateAPIKey(){
+  showModal('Create API Key',
+    '<label class="fld-lbl">Key name:</label><input type="text" id="modal-key-name" placeholder="e.g. production-readonly"><div id="modal-key-msg" class="msg msg-error" style="display:none;margin-top:8px"></div><div id="modal-key-result" style="display:none"></div>',
+    '<button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="doCreateAPIKey()">Create</button>');
+  setTimeout(()=>document.getElementById('modal-key-name').focus(),100)
+}
+async function doCreateAPIKey(){
+  const name=document.getElementById('modal-key-name').value.trim();
+  if(!name){msg(document.getElementById('modal-key-msg'),'Name required');return}
+  document.getElementById('modal-key-msg').style.display='none';
+  const r=await api('POST','/auth/api-keys',{name});
+  if(r.error){msg(document.getElementById('modal-key-msg'),r.error);return}
+  document.getElementById('modal-key-result').style.display='block';
+  document.getElementById('modal-key-result').innerHTML='<div style="font-size:12px;font-weight:600;margin:8px 0 4px;color:var(--success)">Key created — copy it now, it won\'t be shown again:</div>'+
+    '<div class="key-reveal" style="margin:0">'+esc(r.api_key)+'<button class="copy-btn" onclick="copyKey(this)">Copy</button></div>';
+  document.getElementById('modal-key-name').style.display='none';
+  document.querySelector('#modal-footer .btn-primary').textContent='Done';
+  document.querySelector('#modal-footer .btn-primary').onclick=closeModal;
+  document.querySelector('#modal-footer .btn-ghost').style.display='none';
+  loadAPIKeys()
+}
+
+function copyKey(btn){
+  const text=btn.parentElement.textContent.replace('Copy','').trim();
+  navigator.clipboard.writeText(text).then(()=>{btn.textContent='Copied!';setTimeout(()=>{btn.textContent='Copy'},2000)}).catch(()=>{})
+}
+
+function showDeleteAPIKey(id,name){
+  showModal('Delete API Key',
+    '<p>Delete API key <strong>'+esc(name)+'</strong>?</p><p style="color:var(--text2);font-size:12px">Any services using this key will lose access.</p>',
+    '<button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-danger" onclick="doDeleteAPIKey('+id+')">Delete</button>')
+}
+async function doDeleteAPIKey(id){
+  closeModal();
+  const r=await api('DELETE','/auth/api-keys/'+id);
+  if(r.error){showModal('Error','<p>'+esc(r.error)+'</p>','<button class="btn btn-primary" onclick="closeModal()">OK</button>');return}
+  loadAPIKeys()
+}
+
 // ===== Backups =====
 async function loadBackups(){
   const res=await api('GET','/backups');const tb=document.getElementById('backup-tbody');
-  if(res.error){tb.innerHTML='<tr><td colspan="5" class="dim" style="padding:20px;text-align:center">'+esc(res.error)+'</td></tr>';return}
-  const bs=res.backups||[];if(!bs.length){tb.innerHTML='<tr><td colspan="5" class="dim" style="padding:20px;text-align:center">No backups</td></tr>';return}
-  tb.innerHTML=bs.map(b=>'<tr><td class="mono">'+esc(b.name)+'</td><td class="mono">'+esc(b.database)+'</td><td class="mono">'+fmtBytes(b.size)+'</td><td>'+(b.created_at||'')+'</td><td class="actions"><button class="btn-ghost btn-xs" onclick="doRestore(\''+escJS(b.name)+'\',\''+escJS(b.database)+'\')">Restore</button></td></tr>').join('')
+  if(res.error){tb.innerHTML='<tr><td colspan="5" class="dim" style="padding:24px;text-align:center">'+esc(res.error)+'</td></tr>';return}
+  const bs=res.backups||[];if(!bs.length){tb.innerHTML='<tr><td colspan="5" class="dim" style="padding:24px;text-align:center">No backups</td></tr>';return}
+  tb.innerHTML=bs.map(b=>'<tr><td class="mono">'+esc(b.name)+'</td><td class="mono">'+esc(b.database)+'</td><td class="mono">'+fmtBytes(b.size)+'</td><td class="mono">'+fmtTime(b.created_at)+'</td><td class="actions"><button class="btn-ghost btn-xs" onclick="showRestoreConfirm(\''+escJS(b.name)+'\',\''+escJS(b.database)+'\')">Restore</button></td></tr>').join('')
 }
 async function loadBackupDBs(){const r=await api('GET','/databases');const s=document.getElementById('backup-db-select');if(r.databases)s.innerHTML=r.databases.map(d=>'<option value="'+escJS(d)+'">'+esc(d)+'</option>').join('')}
 document.getElementById('backup-create-btn').addEventListener('click',async()=>{const d=document.getElementById('backup-db-select').value;const r=await api('POST','/backup',{database:d});if(r.error){msg(document.getElementById('backup-msg'),r.error);return}msg(document.getElementById('backup-msg'),"Backup created: "+(r.name||''),'success');loadBackups()});
 
-async function doRestore(f,db){if(!confirm('Restore '+f+' into "'+db+'"?'))return;const r=await api('POST','/restore',{backup_file:f,database:db});if(r.error){msg(document.getElementById('restore-msg'),r.error);return}msg(document.getElementById('restore-msg'),"Restored successfully",'success');loadBackups()}
-document.getElementById('restore-btn').addEventListener('click',async()=>{const f=document.getElementById('restore-file').value.trim(),d=document.getElementById('restore-db').value.trim();if(!f||!d){msg(document.getElementById('restore-msg'),'Backup file and target database required');return}await doRestore(f,d)});
+function showRestoreConfirm(f,db){
+  showModal('Restore Backup',
+    '<p>Restore <strong>'+esc(f)+'</strong> into database <strong>'+esc(db)+'</strong>?</p><p style="color:var(--warning);font-weight:600">This will overwrite the current database!</p>',
+    '<button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-danger" onclick="doRestoreConfirm(\''+escJS(f)+'\',\''+escJS(db)+'\')">Restore</button>')
+}
+async function doRestoreConfirm(f,db){
+  closeModal();
+  const r=await api('POST','/restore',{backup_file:f,database:db});
+  if(r.error){showModal('Error','<p>'+esc(r.error)+'</p>','<button class="btn btn-primary" onclick="closeModal()">OK</button>');return}
+  showModal('Done','<p>Restored successfully.</p>','<button class="btn btn-primary" onclick="closeModal()">OK</button>');
+  loadBackups()
+}
+document.getElementById('restore-btn').addEventListener('click',async()=>{const f=document.getElementById('restore-file').value.trim(),d=document.getElementById('restore-db').value.trim();if(!f||!d){msg(document.getElementById('restore-msg'),'Backup file and target database required');return}showRestoreConfirm(f,d)});
 
 // ===== Audit =====
+let allLogs=[];
+document.getElementById('audit-search').addEventListener('input',filterAudit);
+document.getElementById('audit-status').addEventListener('change',filterAudit);
+document.getElementById('audit-refresh').addEventListener('click',loadAudit);
+
 async function loadAudit(){
-  const r=await api('GET','/admin/audit-logs');const el=document.getElementById('audit-list');
-  if(r.error){el.innerHTML='<p class="dim" style="padding:20px;text-align:center">'+esc(r.error)+'</p>';return}
-  const logs=r.logs||[];
-  if(!logs.length){el.innerHTML='<p class="dim" style="padding:20px;text-align:center">No audit logs</p>';return}
+  const r=await api('GET','/admin/audit-logs');
+  if(r.error){document.getElementById('audit-list').innerHTML='<p class="dim" style="padding:20px;text-align:center">'+esc(r.error)+'</p>';return}
+  allLogs=r.logs||[];
+  filterAudit()
+}
+
+function filterAudit(){
+  const search=document.getElementById('audit-search').value.toLowerCase().trim();
+  const status=document.getElementById('audit-status').value;
+  const el=document.getElementById('audit-list');
+  let logs=allLogs;
+  if(status){logs=logs.filter(l=>l.status===status)}
+  if(search){logs=logs.filter(l=>(l.query&&l.query.toLowerCase().includes(search))||(l.username&&l.username.toLowerCase().includes(search))||(l.endpoint&&l.endpoint.toLowerCase().includes(search))||(l.ip_address&&l.ip_address.includes(search)))}
+  if(!logs.length){el.innerHTML='<p class="dim" style="padding:24px;text-align:center">No matching entries</p>';return}
   el.innerHTML=logs.map(l=>{
     const stat=l.status||'';
     const dot=stat==='success'?'success':stat==='failed'?'failed':'blocked';
-    return'<div class="audit-item"><div class="audit-dot audit-dot-'+dot+'"></div><div class="audit-body"><div class="audit-meta"><span>'+esc(l.username||'')+'</span><span>via '+esc(l.endpoint||'')+'</span><span>'+esc(l.status||'')+'</span><span>'+esc(l.created_at||'')+'</span></div><div class="audit-action">'+esc(l.action||'')+'</div></div></div>'
+    return'<div class="audit-item"><div class="audit-dot audit-dot-'+dot+'"></div><div class="audit-body"><div class="audit-meta"><span><strong>'+esc(l.username||'')+'</strong></span><span>'+esc(l.endpoint||'')+'</span><span style="color:'+(stat==='success'?'var(--success)':stat==='failed'?'var(--danger)':'var(--warning)')+'">'+esc(stat)+'</span><span class="audit-ip">'+esc(l.ip_address||'')+'</span><span class="audit-ip">'+fmtTime(l.timestamp)+'</span></div><div class="audit-action">'+esc(l.query||'')+'</div></div></div>'
   }).join('')
 }
-document.getElementById('audit-refresh').addEventListener('click',loadAudit);
-
-// ===== Stats =====
-async function loadStats(){
-  const s=await api('GET','/stats');if(s.error)return;
-  document.getElementById('stat-uptime').textContent=fmtDur(s.uptime_seconds);
-  document.getElementById('stat-queries').textContent=s.total_queries||0;
-  document.getElementById('stat-conns').textContent=s.active_conns||0;
-  document.getElementById('stat-memory').textContent=(s.alloc_mb||0).toFixed(1);
-  document.getElementById('stat-latency').textContent=(s.avg_latency_ms||0).toFixed(1)+'ms';
-  document.getElementById('stat-goroutines').textContent=s.goroutines||0;
-  document.getElementById('stat-failed-logins').textContent=s.failed_logins||0;
-  const el=document.getElementById('stats-db-sizes');
-  if(s.databases&&s.databases.length){
-    const max=Math.max(...s.databases.map(d=>d.size));
-    el.innerHTML=s.databases.map(d=>{
-      const pct=max?Math.max(2,(d.size/max)*100):2;
-      return'<div class="db-bar-row"><span class="db-bar-name">'+esc(d.name)+'</span><div class="db-bar-track"><div class="db-bar-fill" style="width:'+pct+'%"></div></div><span class="db-bar-size">'+fmtBytes(d.size)+'</span></div>'
-    }).join('')
-  }else el.innerHTML='<p class="dim">No databases</p>'
-}
-document.getElementById('stats-refresh').addEventListener('click',loadStats);

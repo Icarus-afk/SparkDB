@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -17,6 +18,15 @@ type User struct {
 	Role         string     `json:"role"`
 	CreatedAt    time.Time  `json:"created_at"`
 	LockedUntil  *time.Time `json:"locked_until,omitempty"`
+}
+
+type APIKey struct {
+	ID        int64      `json:"id"`
+	UserID    int64      `json:"user_id"`
+	Name      string     `json:"name"`
+	Prefix    string     `json:"prefix"`
+	CreatedAt time.Time  `json:"created_at"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 }
 
 type AuditLog struct {
@@ -105,8 +115,19 @@ func migrate(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
 	CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_logs(timestamp);
 	`
-	_, err := db.Exec(schema)
-	return err
+	if _, err := db.Exec(schema); err != nil {
+		return err
+	}
+
+	_, err := db.Exec("ALTER TABLE api_keys ADD COLUMN prefix TEXT DEFAULT ''")
+	if err != nil && !isDuplicateColumn(err) {
+		return err
+	}
+	return nil
+}
+
+func isDuplicateColumn(err error) bool {
+	return err != nil && (strings.Contains(err.Error(), "duplicate column") || strings.Contains(err.Error(), "already exists"))
 }
 
 func (s *SystemDB) CreateUser(username, passwordHash, role string) (*User, error) {
@@ -187,19 +208,60 @@ func (s *SystemDB) UnlockUser(username string) error {
 	return err
 }
 
-func (s *SystemDB) CreateAPIKey(userID int64, keyHash, name string, expiresAt *time.Time) error {
+func (s *SystemDB) CreateAPIKey(userID int64, keyHash, name, prefix string, expiresAt *time.Time) error {
 	var err error
 	if expiresAt != nil {
 		_, err = s.db.Exec(
-			"INSERT INTO api_keys (user_id, key_hash, name, expires_at) VALUES (?, ?, ?, ?)",
-			userID, keyHash, name, *expiresAt,
+			"INSERT INTO api_keys (user_id, key_hash, name, prefix, expires_at) VALUES (?, ?, ?, ?, ?)",
+			userID, keyHash, name, prefix, *expiresAt,
 		)
 	} else {
 		_, err = s.db.Exec(
-			"INSERT INTO api_keys (user_id, key_hash, name) VALUES (?, ?, ?)",
-			userID, keyHash, name,
+			"INSERT INTO api_keys (user_id, key_hash, name, prefix) VALUES (?, ?, ?, ?)",
+			userID, keyHash, name, prefix,
 		)
 	}
+	return err
+}
+
+func (s *SystemDB) ListAPIKeys() ([]*APIKey, error) {
+	rows, err := s.db.Query("SELECT id, user_id, name, prefix, created_at, expires_at FROM api_keys ORDER BY created_at DESC")
+	if err != nil {
+		return nil, fmt.Errorf("list api keys: %w", err)
+	}
+	defer rows.Close()
+	var keys []*APIKey
+	for rows.Next() {
+		k := &APIKey{}
+		var expiresAt sql.NullTime
+		if err := rows.Scan(&k.ID, &k.UserID, &k.Name, &k.Prefix, &k.CreatedAt, &expiresAt); err != nil {
+			return nil, fmt.Errorf("scan api key: %w", err)
+		}
+		if expiresAt.Valid {
+			k.ExpiresAt = &expiresAt.Time
+		}
+		keys = append(keys, k)
+	}
+	return keys, nil
+}
+
+func (s *SystemDB) UpdateUserRole(id int64, role string) error {
+	_, err := s.db.Exec("UPDATE users SET role = ? WHERE id = ?", role, id)
+	return err
+}
+
+func (s *SystemDB) UpdateUserPassword(id int64, passwordHash string) error {
+	_, err := s.db.Exec("UPDATE users SET password_hash = ? WHERE id = ?", passwordHash, id)
+	return err
+}
+
+func (s *SystemDB) DeleteUser(id int64) error {
+	_, err := s.db.Exec("DELETE FROM users WHERE id = ?", id)
+	return err
+}
+
+func (s *SystemDB) DeleteAPIKey(id int64) error {
+	_, err := s.db.Exec("DELETE FROM api_keys WHERE id = ?", id)
 	return err
 }
 

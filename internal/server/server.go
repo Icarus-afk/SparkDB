@@ -104,9 +104,14 @@ func New(cfg *config.Config) (*Server, error) {
 
 	mux.Handle("POST /auth/login", optionalAuth(http.HandlerFunc(handler.HandleLogin)))
 	mux.Handle("POST /auth/api-keys", requireAuth(http.HandlerFunc(handler.HandleCreateAPIKey)))
+	mux.Handle("GET /auth/api-keys", requireAuth(http.HandlerFunc(handler.HandleListAPIKeys)))
+	mux.Handle("DELETE /auth/api-keys/{id}", requireAuth(http.HandlerFunc(handler.HandleDeleteAPIKey)))
 
 	mux.Handle("POST /admin/users", requireAuth(http.HandlerFunc(handler.HandleCreateUser)))
 	mux.Handle("GET /admin/users", requireAuth(http.HandlerFunc(handler.HandleListUsers)))
+	mux.Handle("PUT /admin/users/{id}/role", requireAuth(http.HandlerFunc(handler.HandleUpdateUserRole)))
+	mux.Handle("PUT /admin/users/{id}/password", requireAuth(http.HandlerFunc(handler.HandleUpdateUserPassword)))
+	mux.Handle("DELETE /admin/users/{id}", requireAuth(http.HandlerFunc(handler.HandleDeleteUser)))
 	mux.Handle("GET /admin/audit-logs", requireAuth(http.HandlerFunc(handler.HandleAuditLogs)))
 
 	mux.Handle("GET /health", optionalAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

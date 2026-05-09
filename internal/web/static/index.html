@@ -42,12 +42,12 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Import</a>
       <a class="nav-item" data-view="users">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Users</a>
+      <a class="nav-item" data-view="apikeys">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.5 7.5a5 5 0 1 1-7-7 5 5 0 0 1 7 7zm0 0L21 2"/><path d="M12 12l-3 3"/><path d="M16 8l-2 2"/></svg>API Keys</a>
       <a class="nav-item" data-view="backups">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Backups</a>
       <a class="nav-item" data-view="audit">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="4" x2="21" y2="4"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="20" x2="21" y2="20"/><line x1="3" y1="4" x2="3.01" y2="4"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="20" x2="3.01" y2="20"/></svg>Audit Log</a>
-      <a class="nav-item" data-view="stats">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Stats</a>
     </nav>
     <div class="sidebar-foot">
       <span id="sidebar-user" class="sidebar-user"></span>
@@ -61,33 +61,31 @@
     <section data-view="dashboard" class="view active">
       <div class="ph"><h2>Dashboard</h2></div>
       <div class="sc-grid" id="dash-cards">
-        <div class="sc"><span class="sc-num" id="dash-uptime">-</span><span class="sc-lbl">Uptime</span><div class="sc-bar sc-bar-blue" style="width:100%"></div></div>
-        <div class="sc"><span class="sc-num" id="dash-queries">-</span><span class="sc-lbl">Total Queries</span><div class="sc-bar sc-bar-green" id="dash-query-bar" style="width:0%"></div></div>
-        <div class="sc"><span class="sc-num" id="dash-memory">-</span><span class="sc-lbl">Memory</span><div class="sc-bar sc-bar-purple" id="dash-mem-bar" style="width:0%"></div></div>
-        <div class="sc"><span class="sc-num" id="dash-latency">-</span><span class="sc-lbl">Latency</span><div class="sc-bar sc-bar-orange" id="dash-lat-bar" style="width:0%"></div></div>
-        <div class="sc"><span class="sc-num" id="dash-conns">-</span><span class="sc-lbl">Active DBs</span><div class="sc-bar sc-bar-cyan" id="dash-conn-bar" style="width:0%"></div></div>
-        <div class="sc"><span class="sc-num" id="dash-goroutines">-</span><span class="sc-lbl">Goroutines</span><div class="sc-bar sc-bar-pink" id="dash-gor-bar" style="width:0%"></div></div>
+        <div class="sc"><div class="sc-val"><span class="sc-num" id="dash-queries">-</span><span class="sc-unit">total</span></div><span class="sc-lbl">Queries Executed</span><div class="meter"><div class="meter-fill meter-fill-blue" id="dash-query-bar" style="width:0%"></div></div><span class="sc-hint">lifetime</span></div>
+        <div class="sc"><div class="sc-val"><span class="sc-num" id="dash-memory">-</span><span class="sc-unit">MB</span></div><span class="sc-lbl">Memory Usage</span><div class="meter"><div class="meter-fill meter-fill-purple" id="dash-mem-bar" style="width:0%"></div></div><span class="sc-hint" id="dash-mem-hint">of 100 MB</span></div>
+        <div class="sc"><div class="sc-val"><span class="sc-num" id="dash-latency">-</span><span class="sc-unit">ms</span></div><span class="sc-lbl">Avg Latency</span><div class="meter"><div class="meter-fill meter-fill-orange" id="dash-lat-bar" style="width:0%"></div></div><span class="sc-hint" id="dash-lat-hint">of 500 ms</span></div>
+        <div class="sc"><div class="sc-val"><span class="sc-num" id="dash-conns">-</span><span class="sc-unit">conn</span></div><span class="sc-lbl">Active Conns</span><div class="meter"><div class="meter-fill meter-fill-cyan" id="dash-conn-bar" style="width:0%"></div></div><span class="sc-hint" id="dash-conn-hint">of 100 max</span></div>
+        <div class="sc"><div class="sc-val"><span class="sc-num" id="dash-goroutines">-</span><span class="sc-unit">active</span></div><span class="sc-lbl">Goroutines</span><div class="meter"><div class="meter-fill meter-fill-pink" id="dash-gor-bar" style="width:0%"></div></div><span class="sc-hint" id="dash-gor-hint">of 200</span></div>
+        <div class="sc"><div class="sc-val"><span class="sc-num" id="dash-failed-logins">-</span><span class="sc-unit">failed</span></div><span class="sc-lbl">Failed Logins</span><div class="meter"><div class="meter-fill meter-fill-red" id="dash-fail-bar" style="width:0%"></div></div><span class="sc-hint" id="dash-fail-hint">of 50 limit</span></div>
+        <div class="sc"><div class="sc-val"><span class="sc-num" id="dash-uptime">-</span><span class="sc-unit">uptime</span></div><span class="sc-lbl">Server Uptime</span><div class="meter"><div class="meter-fill meter-fill-green" style="width:100%"></div></div><span class="sc-hint">since last restart</span></div>
+        <div class="sc"><div class="sc-val"><span class="sc-num" id="dash-dbs-count">-</span><span class="sc-unit">dbs</span></div><span class="sc-lbl">Databases</span><div class="meter"><div class="meter-fill meter-fill-blue" id="dash-dbs-bar" style="width:0%"></div></div><span class="sc-hint" id="dash-dbs-hint">attached</span></div>
       </div>
-      <div class="row" style="gap:16px">
+      <div class="row" style="gap:16px;margin-top:16px">
         <div class="col" style="flex:1">
-          <div class="card"><div class="crd-h">Database Storage</div><div id="dash-db-sizes"><p class="dim">Loading…</p></div></div>
-        </div>
-        <div class="col" style="width:220px">
-          <div class="card"><div class="crd-h">Quick Actions</div>
-            <div class="qa-list">
-              <button class="qa-item" onclick="nav('query')">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="6 3 20 12 6 21 6 3"/></svg>Run a query
-              </button>
-              <button class="qa-item" onclick="nav('import')">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Import data
-              </button>
-              <button class="qa-item" onclick="nav('backups')">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Create backup
-              </button>
-              <button class="qa-item" onclick="nav('users')">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Manage users
-              </button>
-            </div>
+          <div class="card"><div class="crd-h">Database Storage</div><div id="dash-db-stacked"></div><div id="dash-db-sizes"></div></div>
+          <div class="qa-grid" style="margin-top:14px">
+            <button class="qa-item" onclick="nav('query')">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="6 3 20 12 6 21 6 3"/></svg>Run a query
+            </button>
+            <button class="qa-item" onclick="nav('import')">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Import data
+            </button>
+            <button class="qa-item" onclick="nav('backups')">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Create backup
+            </button>
+            <button class="qa-item" onclick="nav('users')">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Manage users
+            </button>
           </div>
         </div>
       </div>
@@ -99,8 +97,6 @@
         <div class="q-sb">
           <div class="qsb-h">Databases <button id="q-refresh-dbs" class="btn-icon">&#x21bb;</button></div>
           <div id="q-db-list"></div>
-          <div class="qsb-h" style="margin-top:16px">Tables <button id="q-refresh-tables" class="btn-icon">&#x21bb;</button></div>
-          <div id="q-table-list"><span class="dim">select a database</span></div>
         </div>
         <div class="q-body">
           <div class="q-tb">
@@ -118,7 +114,7 @@
             <span id="q-time" class="dim" style="margin-left:auto;font-family:var(--mono);font-size:11px"></span>
           </div>
           <div id="q-msg" class="msg" style="display:none"></div>
-          <div id="q-count" class="dim" style="display:none;font-size:12px;font-weight:500;padding:4px 0"></div>
+          <div id="q-count" class="dim" style="display:none;font-size:12px;font-weight:600;padding:4px 0"></div>
           <div id="q-results"></div>
         </div>
       </div>
@@ -150,11 +146,11 @@
             </div>
             <div class="form-group">
               <label class="fld-lbl">Table name</label>
-              <input type="text" id="imp-table" placeholder="e.g. users" class="w100">
+              <input type="text" id="imp-table" placeholder="e.g. users" class="w-full inp">
             </div>
             <div class="form-group">
               <label class="fld-lbl">Format</label>
-              <select id="imp-format" class="w100">
+              <select id="imp-format" class="w-full inp">
                 <option value="csv">CSV</option>
                 <option value="json">JSON</option>
               </select>
@@ -165,7 +161,7 @@
         <div class="col" style="flex:1">
           <div class="card" style="margin-bottom:12px">
             <div class="crd-h">Data</div>
-            <textarea id="imp-data" rows="8" placeholder="Paste CSV or JSON data here…" spellcheck="false" class="code-area"></textarea>
+            <textarea id="imp-data" rows="8" placeholder="Paste CSV or JSON data here…" spellcheck="false" class="code-area w-full"></textarea>
           </div>
           <div id="imp-preview" style="margin-bottom:12px;display:none"></div>
           <div id="imp-msg" class="msg" style="display:none"></div>
@@ -190,7 +186,15 @@
         </div>
         <div id="users-msg" class="msg" style="display:none;margin-top:8px"></div>
       </div>
-      <table class="tbl"><thead><tr><th>ID</th><th>Username</th><th>Role</th></tr></thead><tbody id="users-tbody"></tbody></table>
+      <table class="tbl"><thead><tr><th>ID</th><th>Username</th><th>Role</th><th>Created</th><th></th></tr></thead><tbody id="users-tbody"></tbody></table>
+    </section>
+
+    <!-- ===== API KEYS ===== -->
+    <section data-view="apikeys" class="view">
+      <div class="ph"><h2>API Keys</h2><button id="apikey-create-btn" class="btn btn-primary">+ New Key</button></div>
+      <div id="apikey-reveal" style="display:none"></div>
+      <div id="apikey-msg" class="msg" style="display:none"></div>
+      <table class="tbl"><thead><tr><th>Name</th><th>Key Prefix</th><th>Created</th><th></th></tr></thead><tbody id="apikey-tbody"></tbody></table>
     </section>
 
     <!-- ===== BACKUPS ===== -->
@@ -218,25 +222,31 @@
     <!-- ===== AUDIT ===== -->
     <section data-view="audit" class="view">
       <div class="ph"><h2>Audit Log</h2><button id="audit-refresh" class="btn-icon">&#x21bb;</button></div>
-      <div id="audit-list"></div>
-    </section>
-
-    <!-- ===== STATS ===== -->
-    <section data-view="stats" class="view">
-      <div class="ph"><h2>Server Stats</h2><button id="stats-refresh" class="btn-icon">&#x21bb;</button></div>
-      <div class="sc-grid" id="stats-cards">
-        <div class="sc"><span class="sc-num" id="stat-uptime">-</span><span class="sc-lbl">Uptime</span><div class="sc-bar sc-bar-blue" style="width:100%"></div></div>
-        <div class="sc"><span class="sc-num" id="stat-queries">-</span><span class="sc-lbl">Queries</span><div class="sc-bar sc-bar-green" id="stat-query-bar"></div></div>
-        <div class="sc"><span class="sc-num" id="stat-memory">-</span><span class="sc-lbl">Memory (MB)</span><div class="sc-bar sc-bar-purple" id="stat-mem-bar"></div></div>
-        <div class="sc"><span class="sc-num" id="stat-latency">-</span><span class="sc-lbl">Latency</span><div class="sc-bar sc-bar-orange" id="stat-lat-bar"></div></div>
-        <div class="sc"><span class="sc-num" id="stat-conns">-</span><span class="sc-lbl">Active DBs</span><div class="sc-bar sc-bar-cyan" id="stat-conn-bar"></div></div>
-        <div class="sc"><span class="sc-num" id="stat-goroutines">-</span><span class="sc-lbl">Goroutines</span><div class="sc-bar sc-bar-pink" id="stat-gor-bar"></div></div>
-        <div class="sc"><span class="sc-num" id="stat-failed-logins">-</span><span class="sc-lbl">Failed Logins</span><div class="sc-bar sc-bar-red" id="stat-fail-bar"></div></div>
+      <div class="audit-filters">
+        <input type="text" id="audit-search" placeholder="Search by query, user, or endpoint…" class="inp">
+        <select id="audit-status" class="inp">
+          <option value="">All statuses</option>
+          <option value="success">Success</option>
+          <option value="failed">Failed</option>
+          <option value="blocked">Blocked</option>
+        </select>
       </div>
-      <div class="card"><div class="crd-h">Database Storage</div><div id="stats-db-sizes"><p class="dim">Loading…</p></div></div>
+      <div id="audit-list" class="audit-list"></div>
     </section>
 
   </main>
+</div>
+
+<!-- ===== MODAL ===== -->
+<div id="modal-overlay" style="display:none">
+  <div id="modal-box">
+    <div id="modal-header">
+      <span id="modal-title"></span>
+      <button id="modal-close" class="btn-icon">&times;</button>
+    </div>
+    <div id="modal-body"></div>
+    <div id="modal-footer"></div>
+  </div>
 </div>
 
 <script src="/app.js"></script>
