@@ -17,6 +17,8 @@ import (
 	"sparkdb/internal/encryption"
 	"sparkdb/internal/monitor"
 	"sparkdb/internal/query"
+	"sparkdb/internal/rbac"
+	"sparkdb/pkg/api"
 )
 
 type Server struct {
@@ -112,6 +114,7 @@ func New(cfg *config.Config) (*Server, error) {
 	mux.Handle("GET /stats", requireAuth(http.HandlerFunc(handler.HandleStats)))
 	mux.Handle("GET /metrics", http.HandlerFunc(handler.HandlePrometheus))
 
+
 	var h http.Handler = mux
 	h = loggingMiddleware(h)
 	h = recoveryMiddleware(h)
@@ -143,6 +146,23 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 		httpServer.TLSConfig = tlsCfg
 	}
+
+	mux.Handle("POST /shutdown", requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user := auth.UserFromContext(r.Context())
+		if user == nil || !rbac.HasPermission(rbac.Role(user.Role), rbac.PermCreateUser) {
+			writeJSON(w, http.StatusForbidden, api.ErrorResponse{Error: "only admins can shutdown", Code: 403})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"message": "shutting down"})
+		log.Println("shutdown requested via API")
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			httpServer.Shutdown(ctx)
+			dbManager.CloseAll()
+			systemDB.Close()
+		}()
+	})))
 
 	return &Server{
 		httpServer:    httpServer,
