@@ -6,13 +6,13 @@ import (
 	"net/http"
 	"strings"
 
-	"nanodb/internal/auth"
-	"nanodb/internal/backup"
-	"nanodb/internal/database"
-	"nanodb/internal/monitor"
-	"nanodb/internal/query"
-	"nanodb/internal/rbac"
-	"nanodb/pkg/api"
+	"sparkdb/internal/auth"
+	"sparkdb/internal/backup"
+	"sparkdb/internal/database"
+	"sparkdb/internal/monitor"
+	"sparkdb/internal/query"
+	"sparkdb/internal/rbac"
+	"sparkdb/pkg/api"
 )
 
 type Handler struct {

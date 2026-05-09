@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"nanodb/internal/rbac"
+	"sparkdb/internal/rbac"
 )
 
 type QueryType string

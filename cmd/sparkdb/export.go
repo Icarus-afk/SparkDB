@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"nanodb/internal/client"
+	"sparkdb/internal/client"
 
 	"github.com/spf13/cobra"
 )

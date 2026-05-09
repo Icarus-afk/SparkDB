@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"nanodb/internal/database"
-	"nanodb/internal/encryption"
+	"sparkdb/internal/database"
+	"sparkdb/internal/encryption"
 )
 
 type BackupInfo struct {

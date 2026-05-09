@@ -1,4 +1,4 @@
-module nanodb
+module sparkdb
 
 go 1.25.0
 

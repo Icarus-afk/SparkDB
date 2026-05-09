@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"nanodb/internal/client"
+	"sparkdb/internal/client"
 
 	"github.com/spf13/cobra"
 )

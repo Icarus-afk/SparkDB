@@ -6,12 +6,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"nanodb/internal/auth"
-	"nanodb/internal/backup"
-	"nanodb/internal/config"
-	"nanodb/internal/database"
-	"nanodb/internal/encryption"
-	"nanodb/internal/server"
+	"sparkdb/internal/auth"
+	"sparkdb/internal/backup"
+	"sparkdb/internal/config"
+	"sparkdb/internal/database"
+	"sparkdb/internal/encryption"
+	"sparkdb/internal/server"
 )
 
 var cfgPath string

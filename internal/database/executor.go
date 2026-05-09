@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"nanodb/internal/monitor"
-	"nanodb/pkg/api"
+	"sparkdb/internal/monitor"
+	"sparkdb/pkg/api"
 )
 
 type Executor struct {

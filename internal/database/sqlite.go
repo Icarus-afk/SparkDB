@@ -8,7 +8,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"nanodb/internal/encryption"
+	"sparkdb/internal/encryption"
 )
 
 type Manager struct {

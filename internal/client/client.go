@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"nanodb/pkg/api"
+	"sparkdb/pkg/api"
 )
 
 type Client struct {

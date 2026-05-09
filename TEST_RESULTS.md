@@ -1,4 +1,4 @@
-# NanoDB / SparkDB — Test Results
+# sparkdb / SparkDB — Test Results
 
 **Date:** 2026-05-09  
 **Go version:** 1.25.0  
@@ -21,17 +21,17 @@
 
 | Package | Build | Vet |
 |---------|-------|-----|
-| `nanodb/cmd/sparkdb` | PASS | PASS |
-| `nanodb/internal/auth` | PASS | PASS |
-| `nanodb/internal/backup` | PASS | PASS |
-| `nanodb/internal/config` | PASS | PASS |
-| `nanodb/internal/database` | PASS | PASS |
-| `nanodb/internal/encryption` | PASS | PASS |
-| `nanodb/internal/monitor` | PASS | PASS |
-| `nanodb/internal/query` | PASS | PASS |
-| `nanodb/internal/rbac` | PASS | PASS |
-| `nanodb/internal/server` | PASS | PASS |
-| `nanodb/pkg/api` | PASS | PASS |
+| `sparkdb/cmd/sparkdb` | PASS | PASS |
+| `sparkdb/internal/auth` | PASS | PASS |
+| `sparkdb/internal/backup` | PASS | PASS |
+| `sparkdb/internal/config` | PASS | PASS |
+| `sparkdb/internal/database` | PASS | PASS |
+| `sparkdb/internal/encryption` | PASS | PASS |
+| `sparkdb/internal/monitor` | PASS | PASS |
+| `sparkdb/internal/query` | PASS | PASS |
+| `sparkdb/internal/rbac` | PASS | PASS |
+| `sparkdb/internal/server` | PASS | PASS |
+| `sparkdb/pkg/api` | PASS | PASS |
 
 ---
 

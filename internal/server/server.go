@@ -10,13 +10,13 @@ import (
 	"syscall"
 	"time"
 
-	"nanodb/internal/auth"
-	"nanodb/internal/backup"
-	"nanodb/internal/config"
-	"nanodb/internal/database"
-	"nanodb/internal/encryption"
-	"nanodb/internal/monitor"
-	"nanodb/internal/query"
+	"sparkdb/internal/auth"
+	"sparkdb/internal/backup"
+	"sparkdb/internal/config"
+	"sparkdb/internal/database"
+	"sparkdb/internal/encryption"
+	"sparkdb/internal/monitor"
+	"sparkdb/internal/query"
 )
 
 type Server struct {

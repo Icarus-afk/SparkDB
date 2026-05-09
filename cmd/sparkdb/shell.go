@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"nanodb/internal/client"
-	"nanodb/internal/format"
+	"sparkdb/internal/client"
+	"sparkdb/internal/format"
 
 	"github.com/spf13/cobra"
 )

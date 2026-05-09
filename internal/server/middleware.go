@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"nanodb/internal/auth"
-	"nanodb/internal/query"
+	"sparkdb/internal/auth"
+	"sparkdb/internal/query"
 )
 
 type responseWriter struct {
