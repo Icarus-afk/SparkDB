@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -16,9 +17,10 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Host     string `mapstructure:"host"`
-	Port     int    `mapstructure:"port"`
-	ReadOnly bool   `mapstructure:"read_only"`
+	Host           string   `mapstructure:"host"`
+	Port           int      `mapstructure:"port"`
+	ReadOnly       bool     `mapstructure:"read_only"`
+	AllowedOrigins []string `mapstructure:"allowed_origins"`
 }
 
 type DatabaseConfig struct {
@@ -90,5 +92,26 @@ func Load(path string) (*Config, error) {
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, err
 	}
+
+	if cfg.Server.Port < 1 || cfg.Server.Port > 65535 {
+		return nil, fmt.Errorf("invalid server port: %d (must be 1-65535)", cfg.Server.Port)
+	}
+	if cfg.Database.MaxConns < 1 {
+		cfg.Database.MaxConns = 1
+	}
+	if cfg.Backup.KeepCount < 0 {
+		cfg.Backup.KeepCount = 0
+	}
+	if cfg.TLS.Enabled && !cfg.TLS.AutoCert {
+		if cfg.TLS.CertFile == "" || cfg.TLS.KeyFile == "" {
+			return nil, fmt.Errorf("tls enabled without auto_cert: cert_file and key_file must be set")
+		}
+	}
+	if cfg.Encryption.Enabled {
+		if cfg.Encryption.Key == "" && cfg.Encryption.KeyFile == "" {
+			return nil, fmt.Errorf("encryption enabled but no key or key_file provided")
+		}
+	}
+
 	return &cfg, nil
 }
