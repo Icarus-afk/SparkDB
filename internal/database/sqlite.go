@@ -25,21 +25,37 @@ type Manager struct {
 }
 
 func NewManager(dataDir string, walMode bool, maxConns int) *Manager {
-	return &Manager{
+	m := &Manager{
 		dbs:      make(map[string]*sql.DB),
 		dataDir:  dataDir,
 		walMode:  walMode,
 		maxConns: maxConns,
 	}
+	m.cleanupStaleDecFiles()
+	return m
 }
 
 func NewEncryptedManager(dataDir string, walMode bool, maxConns int, c *encryption.Cipher) *Manager {
-	return &Manager{
+	m := &Manager{
 		dbs:      make(map[string]*sql.DB),
 		dataDir:  dataDir,
 		walMode:  false,
 		maxConns: maxConns,
 		cipher:   c,
+	}
+	m.cleanupStaleDecFiles()
+	return m
+}
+
+func (m *Manager) cleanupStaleDecFiles() {
+	entries, err := os.ReadDir(m.dataDir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".dec") {
+			os.Remove(filepath.Join(m.dataDir, e.Name()))
+		}
 	}
 }
 
