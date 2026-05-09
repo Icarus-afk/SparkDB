@@ -42,12 +42,15 @@ curl -X POST http://localhost:9600/query \
 
 ```
 sparkdb start              Start the database server
+sparkdb shell              Interactive SQL shell (REPL)
 sparkdb create-db <name>   Create a new database
 sparkdb create-user <username> <password> <role>  Create a user
 sparkdb gen-key            Generate a 32-byte hex encryption key
 sparkdb gen-cert           Generate a self-signed TLS certificate
 sparkdb encrypt <file>     Encrypt a database file with AES-256-GCM
 sparkdb decrypt <file>     Decrypt a database file
+sparkdb import <file>      Import data from CSV, JSON, or SQL file
+sparkdb export <table>     Export a table to CSV or JSON
 sparkdb backup [database]  Create a backup
 sparkdb restore <file>     Restore from a backup
 sparkdb list-backups       List available backups
@@ -61,6 +64,49 @@ sparkdb list-backups       List available backups
 | `developer` | query, write, create, alter, delete |
 | `readonly` | query |
 | `auditor` | audit_log |
+
+### Shell Meta-Commands
+
+| Command | Description |
+|---------|-------------|
+| `\q` | quit the shell |
+| `\?` | show help |
+| `\dt` | list all tables |
+| `\d <name>` | describe table columns |
+| `\db` | list databases |
+
+### Import
+
+```bash
+# CSV (auto-creates table)
+sparkdb import data.csv
+
+# JSON array
+sparkdb import data.json
+
+# SQL script
+sparkdb import schema.sql
+
+# Specify formats explicitly
+sparkdb import data --format csv
+sparkdb import data --format json
+
+# Connect to a different server
+sparkdb import data.csv --host 192.168.1.100 --port 9600 --user admin --pass secret
+```
+
+### Export
+
+```bash
+# Export table to CSV (stdout)
+sparkdb export users
+
+# Export to JSON file
+sparkdb export users --format json --output users.json
+
+# Export from a specific database
+sparkdb export users --db appdb --format csv --output users.csv
+```
 
 ## API Endpoints
 
@@ -202,9 +248,11 @@ cmd/sparkdb/           CLI entry point
 internal/
   auth/                Authentication (JWT, sessions, API keys, Argon2)
   backup/              Backup and restore
+  client/              HTTP API client (used by shell and import/export)
   config/              Configuration loading
   database/            SQLite manager, executor, system schema
   encryption/          AES-256-GCM cipher, TLS certificates
+  format/              ASCII table formatting for CLI output
   monitor/             Runtime monitoring and metrics
   query/               Query validation and rate limiting
   rbac/                Role-based access control
