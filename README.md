@@ -1,32 +1,34 @@
 # SparkDB
 
-A lightweight, secure SQLite-powered database server with encryption, authentication, RBAC, and HTTP API.
+A lightweight, secure SQLite-powered database server with encryption, authentication, role-based access control, and an HTTP API.
 
 ## Features
 
-- **SQLite-backed** — full SQL via modernc.org/sqlite (pure Go, no CGO)
-- **AES-256-GCM encryption** — at-rest database encryption
-- **Argon2id hashing** — secure password storage
-- **Multi-auth** — JWT, session tokens, and API keys
-- **RBAC** — admin, developer, readonly, and auditor roles
-- **Query validation** — dangerous query detection and permission enforcement
-- **TLS support** — auto-generated self-signed certificates
-- **Audit logging** — all queries and actions logged to system database
-- **Rate limiting** — configurable per-client request limiting
-- **Backup & restore** — on-demand and scheduled backups
-- **Prometheus metrics** — `/metrics` endpoint for monitoring
-- **Transaction support** — atomic multi-statement execution
+- **SQLite-backed** -- full SQL support via modernc.org/sqlite (pure Go, no CGO)
+- **AES-256-GCM encryption** -- at-rest database encryption with key management
+- **Argon2id password hashing** -- memory-hard, timing-safe password storage
+- **Multi-factor authentication** -- JWT Bearer tokens, session tokens, and API keys
+- **Role-based access control** -- admin, developer, readonly, and auditor roles with granular permissions
+- **Query validation** -- dangerous query detection and permission enforcement
+- **TLS support** -- auto-generated self-signed certificates or custom CA-signed certs
+- **Audit logging** -- all queries and administrative actions logged to the system database
+- **Rate limiting** -- configurable per-client request throttling
+- **Account lockout** -- brute-force protection with configurable thresholds and lockout duration
+- **Backup and restore** -- on-demand and scheduled backups with retention policies
+- **Prometheus metrics** -- `/metrics` endpoint for monitoring and alerting
+- **Transaction support** -- atomic multi-statement execution
+- **Web console** -- built-in management UI for databases, users, API keys, backups, and audit logs
 
 ## Quick Start
 
 ```bash
-# Build
+# Build from source
 go build -o sparkdb ./cmd/sparkdb
 
-# Start the server (creates admin/admin on first run)
+# Start the server
 ./sparkdb start
 
-# Login (get a JWT token)
+# Authenticate and get a JWT token
 curl -X POST http://localhost:9600/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username": "admin", "password": "admin"}'
@@ -35,7 +37,178 @@ curl -X POST http://localhost:9600/auth/login \
 curl -X POST http://localhost:9600/query \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{"query": "SELECT 1"}'
+  -d '{"query": "SELECT 1", "database": "main"}'
+```
+
+On first run, SparkDB creates a default `admin` user with password `admin`. **Change this password immediately in production.**
+
+## Installation
+
+### From Source
+
+```bash
+git clone <repo-url>
+cd sparkdb
+go build -o sparkdb ./cmd/sparkdb
+./sparkdb start
+```
+
+### Docker
+
+```bash
+# Build the image
+docker build -t sparkdb .
+
+# Create a config file (see Configuration section)
+cp .env.example .env
+# Edit .env to set SPARKDB_AUTH_JWT_SECRET
+
+# Run with Docker
+docker run -d \
+  --name sparkdb \
+  -p 9600:9600 \
+  -v sparkdb-data:/data \
+  -v sparkdb-backups:/backups \
+  -v $(pwd)/.env:/run/secrets/.env \
+  --env-file .env \
+  sparkdb
+
+# Or use docker-compose
+cp .env.example .env
+# Edit .env with your settings
+docker compose up -d
+```
+
+## Configuration
+
+SparkDB is configured through a JSON configuration file, environment variables, or both. Environment variables override config file values.
+
+### Configuration File
+
+Create `config.json` in the working directory or `/etc/sparkdb/config.json`:
+
+```json
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 9600,
+    "allowed_origins": ["https://myapp.example.com"]
+  },
+  "database": {
+    "data_dir": "/data",
+    "wal_mode": true,
+    "max_connections": 100
+  },
+  "auth": {
+    "jwt_secret": "your-strong-random-secret-min-32-chars"
+  },
+  "tls": {
+    "enabled": true,
+    "auto_cert": true,
+    "cert_file": "/etc/sparkdb/sparkdb.crt",
+    "key_file": "/etc/sparkdb/sparkdb.key"
+  },
+  "encryption": {
+    "enabled": false,
+    "key": "",
+    "key_file": ""
+  },
+  "backup": {
+    "dir": "/backups",
+    "schedule": "",
+    "keep_count": 10
+  }
+}
+```
+
+Use `-c /path/to/config.json` to specify a custom config path.
+
+### Environment Variables
+
+All config values can be set via environment variables with the `SPARKDB_` prefix:
+
+| Variable | Description |
+|----------|-------------|
+| `SPARKDB_AUTH_JWT_SECRET` | JWT signing secret (min 32 chars, REQUIRED in production) |
+| `SPARKDB_ENCRYPTION_KEY` | 32-byte hex key for database encryption |
+| `SPARKDB_SERVER_HOST` | Server bind address (default: 0.0.0.0) |
+| `SPARKDB_SERVER_PORT` | Server port (default: 9600) |
+| `SPARKDB_SERVER_ALLOWED_ORIGINS` | Comma-separated CORS origins |
+| `SPARKDB_DATABASE_DATA_DIR` | Database storage directory |
+| `SPARKDB_BACKUP_DIR` | Backup storage directory |
+| `SPARKDB_TLS_ENABLED` | Enable TLS (true/false) |
+
+### Docker Secrets
+
+When running in Docker, use a `.env` file (see `.env.example`) with `--env-file .env` or the `env_file` directive in docker-compose.yml.
+
+## Security
+
+### Authentication
+
+SparkDB supports three authentication methods:
+
+1. **JWT Bearer tokens** -- short-lived tokens (default 24h TTL) signed with HMAC-SHA256
+2. **Session tokens** -- server-managed sessions stored as SHA-256 hashes in the system database
+3. **API keys** -- long-lived keys prefixed with `vl_`, stored as SHA-256 hashes
+
+All passwords are hashed with Argon2id (memory: 64MB, time: 3, threads: 4).
+
+### Rate Limiting
+
+- Login attempts: 5 failures trigger a 15-minute account lockout (configurable)
+- API requests: 60 requests per minute per client (configurable in code)
+
+### Encryption at Rest
+
+Database files can be encrypted with AES-256-GCM. Generate a key with:
+
+```bash
+sparkdb gen-key
+```
+
+Set the key in config (`encryption.key`) or environment (`SPARKDB_ENCRYPTION_KEY`).
+
+### TLS
+
+Enable TLS for encrypted connections:
+
+```json
+{
+  "tls": {
+    "enabled": true,
+    "auto_cert": true
+  }
+```
+
+Auto-generated certificates use ECDSA P-384 and are valid for 10 years. For production, replace with CA-signed certificates.
+
+### API Key Protection
+
+- API keys are encrypted at rest using AES-256-GCM with a key derived from the JWT secret
+- Full keys are shown only once on creation
+- Re-display requires entering your account password
+- Keys are hashed with SHA-256 for authentication lookups
+
+### CORS
+
+By default, CORS allows all origins. Restrict in production by setting `server.allowed_origins`:
+
+```json
+"allowed_origins": ["https://app.example.com", "https://admin.example.com"]
+```
+
+Or via environment: `SPARKDB_SERVER_ALLOWED_ORIGINS=https://app.example.com`
+
+### Security Headers
+
+When running behind a reverse proxy (nginx, Caddy, Traefik), add these headers:
+
+```
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+Content-Security-Policy: default-src 'self'
 ```
 
 ## CLI Reference
@@ -43,6 +216,7 @@ curl -X POST http://localhost:9600/query \
 ```
 sparkdb start              Start the database server
 sparkdb shell              Interactive SQL shell (REPL)
+sparkdb query <sql>        Run a single SQL query and exit
 sparkdb create-db <name>   Create a new database
 sparkdb create-user <username> <password> <role>  Create a user
 sparkdb gen-key            Generate a 32-byte hex encryption key
@@ -51,34 +225,130 @@ sparkdb encrypt <file>     Encrypt a database file with AES-256-GCM
 sparkdb decrypt <file>     Decrypt a database file
 sparkdb import <file>      Import data from CSV, JSON, or SQL file
 sparkdb export <table>     Export a table to CSV or JSON
-sparkdb backup [database]  Create a backup
+sparkdb backup <database>  Create a backup
 sparkdb restore <file>     Restore from a backup
 sparkdb list-backups       List available backups
+sparkdb stop               Gracefully stop the server
 ```
 
-### Roles
+Credentials can be passed to CLI commands with `--user`, `--pass`, or `--api-key`. If omitted, the CLI prompts for credentials or uses defaults (not recommended for production).
 
-| Role | Permissions |
-|------|------------|
-| `admin` | all |
-| `developer` | query, write, create, alter, delete |
-| `readonly` | query |
-| `auditor` | audit_log |
-
-### Shell Meta-Commands
+## Shell Meta-Commands
 
 | Command | Description |
 |---------|-------------|
-| `\q` | quit the shell |
-| `\?` | show help |
-| `\dt` | list all tables |
-| `\d <name>` | describe table columns |
-| `\db` | list databases |
+| `\q` | Quit the shell |
+| `\?` | Show help |
+| `\dt` | List all tables in current database |
+| `\d <name>` | Describe table columns |
+| `\use <db>` | Switch to a different database |
+| `\db` | Show current database |
+| `\list` | List all databases |
+
+## Roles and Permissions
+
+| Role | Permissions |
+|------|-------------|
+| `admin` | All permissions |
+| `developer` | query, write, create, alter, delete |
+| `readonly` | query only |
+| `auditor` | audit_log access |
+
+## API Endpoints
+
+### Authentication
+
+**POST /auth/login**
+```json
+{"username": "admin", "password": "admin"}
+```
+Returns `{"token": "<jwt>", "token_type": "bearer", "user": {...}}`
+
+**POST /auth/api-keys** -- Create a new API key (admin only)
+```json
+{"name": "my-key"}
+```
+Returns `{"api_key": "vl_...", "name": "my-key"}`
+
+**POST /auth/api-keys/{id}/reveal** -- Re-display an API key (requires password)
+```json
+{"password": "your-password"}
+```
+
+**GET /auth/api-keys** -- List API keys
+
+### Query
+
+**POST /query**
+```json
+{"query": "SELECT * FROM users", "database": "main"}
+```
+
+**POST /transaction**
+```json
+{"queries": ["INSERT INTO t (v) VALUES (1)", "SELECT * FROM t"], "database": "main"}
+```
+
+### Administration
+
+**POST /admin/users** -- Create user (admin only)
+```json
+{"username": "dev1", "password": "securepass", "role": "developer"}
+```
+
+**GET /admin/users** -- List users (admin only)
+
+**DELETE /admin/users/{id}** -- Delete user (admin only)
+
+**PUT /admin/users/{id}/role** -- Change user role (admin only)
+```json
+{"role": "readonly"}
+```
+
+**GET /admin/audit-logs** -- View audit logs (admin/auditor)
+
+### Operations
+
+**POST /backup** -- Create a backup (admin only)
+```json
+{"database": "main"}
+```
+
+**DELETE /backups/{name}** -- Delete a backup (admin only)
+
+**POST /restore** -- Restore from backup (admin only)
+```json
+{"backup_file": "main_20260509_120000.db.backup", "database": "main"}
+```
+
+**GET /backups** -- List backups
+
+**GET /databases** -- List databases
+
+**GET /stats** -- Server statistics
+
+### Health and Monitoring
+
+**GET /health** -- Health check
+
+**GET /metrics** -- Prometheus metrics endpoint
+
+### Authentication Methods
+
+Pass authentication via HTTP header:
+
+```
+Authorization: Bearer <jwt-token>
+Authorization: Session <session-token>
+X-API-Key: <api-key>
+```
+
+## Import and Export
 
 ### Import
 
 ```bash
-# CSV (auto-creates table)
+# CSV (auto-creates table from filename)
 sparkdb import data.csv
 
 # JSON array
@@ -87,11 +357,10 @@ sparkdb import data.json
 # SQL script
 sparkdb import schema.sql
 
-# Specify formats explicitly
+# Specify format explicitly
 sparkdb import data --format csv
-sparkdb import data --format json
 
-# Connect to a different server
+# Connect to remote server
 sparkdb import data.csv --host 192.168.1.100 --port 9600 --user admin --pass secret
 ```
 
@@ -108,122 +377,22 @@ sparkdb export users --format json --output users.json
 sparkdb export users --db appdb --format csv --output users.csv
 ```
 
-## API Endpoints
+## Web Console
 
-### Authentication
+SparkDB includes a built-in web management console served at `http://localhost:9600/`. The console provides:
 
-**POST /auth/login**
-```json
-{"username": "admin", "password": "admin"}
-```
-Returns `{"token": "<jwt>", "token_type": "bearer", "user": {...}}`
-
-**POST /auth/api-keys**
-```json
-{"name": "my-key"}
-```
-Returns `{"api_key": "vl_...", "name": "my-key"}`
-
-### Query
-
-**POST /query**
-```json
-{"query": "SELECT * FROM users", "database": "main"}
-```
-
-**POST /transaction**
-```json
-{"queries": ["INSERT INTO t (v) VALUES (1)", "SELECT * FROM t"], "database": "main"}
-```
-
-### Admin
-
-**POST /admin/users** — create user (admin only)
-```json
-{"username": "dev1", "password": "securepass", "role": "developer"}
-```
-
-**GET /admin/users** — list users (admin only)
-
-**GET /admin/audit-logs** — view audit logs (admin/auditor)
-
-### Operations
-
-**POST /backup** — create backup
-```json
-{"database": "main"}
-```
-
-**POST /restore** — restore from backup
-```json
-{"backup_file": "backups/main_20260509_120000.db.backup", "database": "main"}
-```
-
-**GET /backups** — list backups
-
-### Monitoring
-
-**GET /stats** — runtime statistics (admin/auditor)
-
-**GET /metrics** — Prometheus metrics
-
-**GET /health** — health check
-
-### Auth Methods
-
-Pass authentication via header:
-
-```
-Authorization: Bearer <jwt-token>
-Authorization: Session <session-token>
-X-API-Key: <api-key>
-```
-
-## Configuration
-
-Create `config.json` in the working directory or `/etc/sparkdb/config.json`:
-
-```json
-{
-  "server": {
-    "host": "0.0.0.0",
-    "port": 9600
-  },
-  "database": {
-    "data_dir": ".",
-    "wal_mode": true,
-    "max_connections": 100
-  },
-  "auth": {
-    "jwt_secret": "your-secret"
-  },
-  "tls": {
-    "enabled": false,
-    "auto_cert": true,
-    "cert_file": "sparkdb.crt",
-    "key_file": "sparkdb.key"
-  },
-  "encryption": {
-    "enabled": false,
-    "key": "",
-    "key_file": ""
-  },
-  "backup": {
-    "dir": "backups",
-    "schedule": "",
-    "keep_count": 10
-  }
-}
-```
-
-Use `-c /path/to/config.json` to specify a custom config path.
-
-Environment variables: `SPARKDB_ENCRYPTION_KEY` for the encryption key.
+- Dashboard with server statistics and database storage visualization
+- SQL query editor with results export (CSV, JSON)
+- Database management (create, drop, view tables, export tables)
+- User and role management
+- API key management with password-protected reveal
+- Backup management (create, restore, delete)
+- Audit log viewer with search and filtering
 
 ## Development
 
 ```bash
-git clone <repo>
+git clone <repo-url>
 cd sparkdb
 
 # Build
@@ -235,11 +404,9 @@ go test ./...
 # Run vet
 go vet ./...
 
-# Start dev server
+# Start development server
 go run ./cmd/sparkdb start
 ```
-
-Default admin credentials on first run: `admin` / `admin`
 
 ### Project Structure
 
@@ -248,26 +415,57 @@ cmd/sparkdb/           CLI entry point
 internal/
   auth/                Authentication (JWT, sessions, API keys, Argon2)
   backup/              Backup and restore
-  client/              HTTP API client (used by shell and import/export)
-  config/              Configuration loading
+  client/              HTTP API client (used by shell, import, export)
+  config/              Configuration loading and validation
   database/            SQLite manager, executor, system schema
   encryption/          AES-256-GCM cipher, TLS certificates
   format/              ASCII table formatting for CLI output
-  monitor/             Runtime monitoring and metrics
-  query/               Query validation and rate limiting
+  monitor/             Runtime monitoring and Prometheus metrics
+  query/               Query validation, type detection, rate limiting
   rbac/                Role-based access control
-  server/              HTTP server, middleware, routes
+  server/              HTTP server, middleware, route handlers
+  web/                 Embedded web console (static assets)
 pkg/api/               Shared API types
 ```
 
 ### Tech Stack
 
-- **Go 1.25+** — no CGO required
-- **modernc.org/sqlite** — pure Go SQLite
-- **golang-jwt/jwt/v5** — JWT tokens
-- **spf13/cobra** — CLI framework
-- **spf13/viper** — configuration
-- **golang.org/x/crypto** — Argon2id
+- Go 1.25+ (no CGO required)
+- modernc.org/sqlite -- pure Go SQLite driver
+- golang-jwt/jwt/v5 -- JWT authentication
+- spf13/cobra -- CLI framework
+- spf13/viper -- configuration management
+- golang.org/x/crypto -- Argon2id password hashing
+
+## Deployment
+
+### Production Checklist
+
+1. Set a strong `SPARKDB_AUTH_JWT_SECRET` (minimum 32 random characters)
+2. Enable TLS with CA-signed certificates
+3. Restrict CORS origins to your application domain
+4. Change the default admin password immediately
+5. Configure firewall rules to restrict access to port 9600
+6. Set up regular backups with `backup.schedule`
+7. Enable database encryption with `sparkdb gen-key`
+8. Use a reverse proxy (nginx, Caddy) for additional security headers
+9. Run as a non-root user (Docker does this automatically)
+10. Monitor via the `/metrics` Prometheus endpoint
+
+### Docker Production Deployment
+
+```bash
+# Generate a strong JWT secret
+openssl rand -hex 32
+
+# Create .env file
+echo "SPARKDB_AUTH_JWT_SECRET=$(openssl rand -hex 32)" > .env
+echo "SPARKDB_TLS_ENABLED=true" >> .env
+echo "SPARKDB_ENCRYPTION_KEY=$(./sparkdb gen-key 2>&1)" >> .env
+
+# Deploy
+docker compose up -d
+```
 
 ## License
 
