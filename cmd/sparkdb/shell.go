@@ -242,9 +242,22 @@ func handleMeta(c *client.Client, line string) bool {
 	case "\\db":
 		fmt.Printf("Current database: %s\n", shellDB)
 	case "\\list":
+		dbs, err := c.ListDatabases()
+		if err != nil {
+			fmt.Printf("Error: %s\n", err)
+			return true
+		}
 		fmt.Println("Available databases:")
-		fmt.Println("  main  (default)")
-		fmt.Println("  (create more with: sparkdb create-db <name>)")
+		for _, db := range dbs {
+			cur := ""
+			if db == shellDB {
+				cur = "  <-- current"
+			}
+			fmt.Printf("  %s%s\n", db, cur)
+		}
+		if len(dbs) == 0 {
+			fmt.Println("  (create one with: sparkdb create-db <name>)")
+		}
 	default:
 		fmt.Printf("Unknown meta-command: %s (try \\?)\n", parts[0])
 	}

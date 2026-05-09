@@ -360,6 +360,11 @@ func (h *Handler) HandleStats(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, stats)
 }
 
+func (h *Handler) HandleListDatabases(w http.ResponseWriter, r *http.Request) {
+	databases := h.executor.ListDatabases()
+	writeJSON(w, http.StatusOK, map[string]interface{}{"databases": databases})
+}
+
 func (h *Handler) HandlePrometheus(w http.ResponseWriter, r *http.Request) {
 	stats := h.monitor.Stats()
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")

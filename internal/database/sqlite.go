@@ -139,6 +139,40 @@ func (m *Manager) List() []string {
 	return names
 }
 
+func (m *Manager) ListAll() []string {
+	seen := make(map[string]bool)
+	for name := range m.dbs {
+		seen[name] = true
+	}
+	entries, err := os.ReadDir(m.dataDir)
+	if err == nil {
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			name := e.Name()
+			if name == "sparkdb_system.db" || name == "sparkdb_system.db-wal" || name == "sparkdb_system.db-shm" {
+				continue
+			}
+			if len(name) > 4 && name[len(name)-4:] == ".dec" {
+				continue
+			}
+			if len(name) > 4 && (name[len(name)-4:] == "-wal" || name[len(name)-4:] == "-shm") {
+				continue
+			}
+			if len(name) > 5 && name[len(name)-5:] == "-journal" {
+				continue
+			}
+			seen[name] = true
+		}
+	}
+	names := make([]string, 0, len(seen))
+	for n := range seen {
+		names = append(names, n)
+	}
+	return names
+}
+
 func (m *Manager) resolvePath(name string) string {
 	return m.dataDir + "/" + name
 }

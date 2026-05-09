@@ -120,6 +120,29 @@ func (c *Client) Transaction(database string, queries []string) (*api.Transactio
 	return &tr, nil
 }
 
+func (c *Client) ListDatabases() ([]string, error) {
+	httpReq, _ := http.NewRequest("GET", c.baseURL+"/databases", nil)
+	c.auth(httpReq)
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Databases []string `json:"databases"`
+		Error     string   `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode: %w", err)
+	}
+	if result.Error != "" {
+		return nil, fmt.Errorf("%s", result.Error)
+	}
+	return result.Databases, nil
+}
+
 func (c *Client) auth(req *http.Request) {
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)

@@ -23,6 +23,10 @@ func NewExecutorWithMonitor(manager *Manager, mon *monitor.Monitor) *Executor {
 	return &Executor{manager: manager, mon: mon}
 }
 
+func (e *Executor) ListDatabases() []string {
+	return e.manager.ListAll()
+}
+
 func (e *Executor) Execute(dbName, query string) (*api.QueryResponse, error) {
 	start := time.Now()
 

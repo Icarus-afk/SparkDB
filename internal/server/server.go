@@ -111,6 +111,7 @@ func New(cfg *config.Config) (*Server, error) {
 	mux.Handle("GET /health", optionalAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})))
+	mux.Handle("GET /databases", requireAuth(http.HandlerFunc(handler.HandleListDatabases)))
 	mux.Handle("GET /stats", requireAuth(http.HandlerFunc(handler.HandleStats)))
 	mux.Handle("GET /metrics", http.HandlerFunc(handler.HandlePrometheus))
 
