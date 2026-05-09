@@ -14,14 +14,18 @@ import (
 	"nanodb/internal/server"
 )
 
-func main() {
-	var cfgPath string
+var cfgPath string
 
-	rootCmd := &cobra.Command{
-		Use:   "sparkdb",
-		Short: "SparkDB - lightweight SQLite-powered database server",
-	}
+var rootCmd = &cobra.Command{
+	Use:   "sparkdb",
+	Short: "SparkDB - lightweight SQLite-powered database server",
+}
+
+func init() {
 	rootCmd.PersistentFlags().StringVarP(&cfgPath, "config", "c", "", "path to config file")
+}
+
+func main() {
 
 	startCmd := &cobra.Command{
 		Use:   "start",
