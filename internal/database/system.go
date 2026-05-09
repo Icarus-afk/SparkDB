@@ -21,12 +21,13 @@ type User struct {
 }
 
 type APIKey struct {
-	ID        int64      `json:"id"`
-	UserID    int64      `json:"user_id"`
-	Name      string     `json:"name"`
-	Prefix    string     `json:"prefix"`
-	CreatedAt time.Time  `json:"created_at"`
-	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	ID           int64      `json:"id"`
+	UserID       int64      `json:"user_id"`
+	Name         string     `json:"name"`
+	Prefix       string     `json:"prefix"`
+	CreatedAt    time.Time  `json:"created_at"`
+	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
+	EncryptedKey string     `json:"-"`
 }
 
 type AuditLog struct {
@@ -123,6 +124,10 @@ func migrate(db *sql.DB) error {
 	if err != nil && !isDuplicateColumn(err) {
 		return err
 	}
+	_, err = db.Exec("ALTER TABLE api_keys ADD COLUMN encrypted_key TEXT DEFAULT ''")
+	if err != nil && !isDuplicateColumn(err) {
+		return err
+	}
 	return nil
 }
 
@@ -208,24 +213,39 @@ func (s *SystemDB) UnlockUser(username string) error {
 	return err
 }
 
-func (s *SystemDB) CreateAPIKey(userID int64, keyHash, name, prefix string, expiresAt *time.Time) error {
+func (s *SystemDB) CreateAPIKey(userID int64, keyHash, name, prefix string, expiresAt *time.Time, encryptedKey string) error {
 	var err error
 	if expiresAt != nil {
 		_, err = s.db.Exec(
-			"INSERT INTO api_keys (user_id, key_hash, name, prefix, expires_at) VALUES (?, ?, ?, ?, ?)",
-			userID, keyHash, name, prefix, *expiresAt,
+			"INSERT INTO api_keys (user_id, key_hash, name, prefix, expires_at, encrypted_key) VALUES (?, ?, ?, ?, ?, ?)",
+			userID, keyHash, name, prefix, *expiresAt, encryptedKey,
 		)
 	} else {
 		_, err = s.db.Exec(
-			"INSERT INTO api_keys (user_id, key_hash, name, prefix) VALUES (?, ?, ?, ?)",
-			userID, keyHash, name, prefix,
+			"INSERT INTO api_keys (user_id, key_hash, name, prefix, encrypted_key) VALUES (?, ?, ?, ?, ?)",
+			userID, keyHash, name, prefix, encryptedKey,
 		)
 	}
 	return err
 }
 
+func (s *SystemDB) GetAPIKey(id int64) (*APIKey, error) {
+	row := s.db.QueryRow(
+		"SELECT id, user_id, name, prefix, created_at, expires_at, encrypted_key FROM api_keys WHERE id = ?", id,
+	)
+	k := &APIKey{}
+	var expiresAt sql.NullTime
+	if err := row.Scan(&k.ID, &k.UserID, &k.Name, &k.Prefix, &k.CreatedAt, &expiresAt, &k.EncryptedKey); err != nil {
+		return nil, fmt.Errorf("get api key: %w", err)
+	}
+	if expiresAt.Valid {
+		k.ExpiresAt = &expiresAt.Time
+	}
+	return k, nil
+}
+
 func (s *SystemDB) ListAPIKeys() ([]*APIKey, error) {
-	rows, err := s.db.Query("SELECT id, user_id, name, prefix, created_at, expires_at FROM api_keys ORDER BY created_at DESC")
+	rows, err := s.db.Query("SELECT id, user_id, name, prefix, created_at, expires_at, encrypted_key FROM api_keys ORDER BY created_at DESC")
 	if err != nil {
 		return nil, fmt.Errorf("list api keys: %w", err)
 	}
@@ -234,7 +254,7 @@ func (s *SystemDB) ListAPIKeys() ([]*APIKey, error) {
 	for rows.Next() {
 		k := &APIKey{}
 		var expiresAt sql.NullTime
-		if err := rows.Scan(&k.ID, &k.UserID, &k.Name, &k.Prefix, &k.CreatedAt, &expiresAt); err != nil {
+		if err := rows.Scan(&k.ID, &k.UserID, &k.Name, &k.Prefix, &k.CreatedAt, &expiresAt, &k.EncryptedKey); err != nil {
 			return nil, fmt.Errorf("scan api key: %w", err)
 		}
 		if expiresAt.Valid {

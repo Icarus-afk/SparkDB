@@ -2,7 +2,13 @@ package auth
 
 import (
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -228,6 +234,50 @@ func (a *Authenticator) DeleteUser(id int64) error {
 	return a.systemDB.DeleteUser(id)
 }
 
+func (a *Authenticator) encryptRawKey(rawKey string) (string, error) {
+	key := sha256.Sum256(a.jwtManager.secret)
+	block, err := aes.NewCipher(key[:])
+	if err != nil {
+		return "", fmt.Errorf("new cipher: %w", err)
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", fmt.Errorf("new gcm: %w", err)
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return "", fmt.Errorf("nonce: %w", err)
+	}
+	ciphertext := gcm.Seal(nonce, nonce, []byte(rawKey), nil)
+	return base64.RawStdEncoding.EncodeToString(ciphertext), nil
+}
+
+func (a *Authenticator) decryptRawKey(encrypted string) (string, error) {
+	key := sha256.Sum256(a.jwtManager.secret)
+	data, err := base64.RawStdEncoding.DecodeString(encrypted)
+	if err != nil {
+		return "", fmt.Errorf("decode: %w", err)
+	}
+	block, err := aes.NewCipher(key[:])
+	if err != nil {
+		return "", fmt.Errorf("new cipher: %w", err)
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", fmt.Errorf("new gcm: %w", err)
+	}
+	nonceSize := gcm.NonceSize()
+	if len(data) < nonceSize {
+		return "", fmt.Errorf("ciphertext too short")
+	}
+	nonce, ciphertext := data[:nonceSize], data[nonceSize:]
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return "", fmt.Errorf("decrypt: %w", err)
+	}
+	return string(plaintext), nil
+}
+
 func (a *Authenticator) GenerateAPIKey(userID int64, name string) (string, error) {
 	rawKey, hashedKey, err := a.apiKeyMgr.Generate()
 	if err != nil {
@@ -239,10 +289,38 @@ func (a *Authenticator) GenerateAPIKey(userID int64, name string) (string, error
 		prefix = rawKey[:12] + "..."
 	}
 
-	if err := a.systemDB.CreateAPIKey(userID, hashedKey, name, prefix, nil); err != nil {
+	encryptedKey, err := a.encryptRawKey(rawKey)
+	if err != nil {
+		return "", fmt.Errorf("encrypt key: %w", err)
+	}
+
+	if err := a.systemDB.CreateAPIKey(userID, hashedKey, name, prefix, nil, encryptedKey); err != nil {
 		return "", fmt.Errorf("store API key: %w", err)
 	}
 
+	return rawKey, nil
+}
+
+func (a *Authenticator) RevealAPIKey(id int64, password string) (string, error) {
+	key, err := a.systemDB.GetAPIKey(id)
+	if err != nil {
+		return "", fmt.Errorf("get api key: %w", err)
+	}
+	if key.EncryptedKey == "" {
+		return "", fmt.Errorf("no encrypted key stored")
+	}
+	user, err := a.systemDB.GetUser(key.UserID)
+	if err != nil {
+		return "", fmt.Errorf("get user: %w", err)
+	}
+	valid, err := VerifyPassword(password, user.PasswordHash)
+	if err != nil || !valid {
+		return "", fmt.Errorf("invalid password")
+	}
+	rawKey, err := a.decryptRawKey(key.EncryptedKey)
+	if err != nil {
+		return "", fmt.Errorf("decrypt key: %w", err)
+	}
 	return rawKey, nil
 }
 
