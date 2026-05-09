@@ -84,23 +84,18 @@ input:focus,select:focus,textarea:focus{border-color:var(--primary)!important;bo
 .crd-h{font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text)}
 
 /* ===== Stat Cards ===== */
-.sc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:10px}
-.sc{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:flex;flex-direction:column;gap:8px;box-shadow:var(--shadow)}
-.sc-val{display:flex;align-items:baseline;gap:4px}
-.sc-num{font-size:22px;font-weight:700;color:var(--text);font-family:var(--mono);letter-spacing:-.4px;line-height:1}
-.sc-unit{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;font-weight:600}
-.sc-lbl{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
-
-/* ===== Meter bars ===== */
-.meter{height:4px;background:#e8eaf0;border-radius:3px;overflow:hidden}
-.meter-fill{height:100%;border-radius:3px;transition:width .6s ease}
-.meter-fill-blue{background:var(--primary)}
-.meter-fill-green{background:var(--success)}
-.meter-fill-purple{background:#8b5cf6}
-.meter-fill-orange{background:var(--warning)}
-.meter-fill-cyan{background:#06b6d4}
-.meter-fill-pink{background:#ec4899}
-.meter-fill-red{background:var(--danger)}
+.sc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.sc{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 18px 14px;display:flex;flex-direction:column;gap:2px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.sc-a{position:absolute;top:0;left:0;right:0;height:3px}
+.sc-a-blue{background:linear-gradient(90deg,var(--primary),#7c9aff)}
+.sc-a-purple{background:linear-gradient(90deg,#8b5cf6,#a78bfa)}
+.sc-a-orange{background:linear-gradient(90deg,var(--warning),#fbbf24)}
+.sc-a-cyan{background:linear-gradient(90deg,#06b6d4,#22d3ee)}
+.sc-a-pink{background:linear-gradient(90deg,#ec4899,#f472b6)}
+.sc-a-red{background:linear-gradient(90deg,var(--danger),#f87171)}
+.sc-a-green{background:linear-gradient(90deg,var(--success),#4ade80)}
+.sc-num{font-size:26px;font-weight:800;color:var(--text);font-family:var(--mono);letter-spacing:-.5px;line-height:1.15}
+.sc-lbl{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;font-weight:700}
 
 /* ===== Stacked Storage Bar ===== */
 .storage-stacked{display:flex;height:28px;border-radius:6px;overflow:hidden;gap:2px;margin-bottom:8px}
@@ -140,6 +135,19 @@ input:focus,select:focus,textarea:focus{border-color:var(--primary)!important;bo
 .qa-item{display:flex;align-items:center;gap:9px;padding:11px 14px;background:var(--bg);border:none;border-radius:var(--radius-sm);font-size:12px;font-weight:600;cursor:pointer;transition:all .12s;font-family:var(--font);color:var(--text);text-align:left;width:100%}
 .qa-item:hover{background:var(--primary);color:#fff}
 .qa-item svg{flex-shrink:0;width:15px;height:15px}
+
+/* ===== Databases page ===== */
+.db-main-row{cursor:pointer}
+.db-main-row:hover{background:var(--bg)}
+.db-chevron{font-size:8px;transition:transform .15s;color:var(--text2);width:14px;display:inline-block;text-align:center}
+.db-chevron.open{transform:rotate(90deg)}
+.db-detail-row td{padding:0!important;border-bottom:none!important}
+.db-detail{padding:8px 0 8px 28px}
+.tbl-nested{font-size:12px}
+.tbl-nested th{font-size:9px;padding:6px 10px;border-bottom:1px solid var(--border)}
+.tbl-nested td{padding:5px 10px;border-bottom:1px solid var(--border);font-size:12px}
+.tbl-nested tbody tr:last-child td{border-bottom:none}
+.tbl-nested tbody tr:hover{background:var(--bg)}
 
 /* ===== Database size bar (dashboard) ===== */
 .db-bar-row{display:flex;align-items:center;gap:10px;padding:4px 0}
@@ -219,6 +227,4 @@ input:focus,select:focus,textarea:focus{border-color:var(--primary)!important;bo
 
 /* ===== Dashboard stat hover ===== */
 .sc{transition:box-shadow .2s,transform .15s}
-.sc:hover{box-shadow:0 2px 8px rgba(0,0,0,.08);transform:translateY(-1px)}
-.sc .sc-num{transition:color .2s}
-.sc:hover .sc-num{color:var(--primary)}
+.sc:hover{box-shadow:0 4px 16px rgba(0,0,0,.08);transform:translateY(-2px);border-color:transparent}

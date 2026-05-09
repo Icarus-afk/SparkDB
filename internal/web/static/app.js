@@ -1,4 +1,4 @@
-let token='',currentDB='main',lastCols=null,lastRows=null;
+let token=localStorage.getItem('sparkdb_token')||'',currentDB='main',lastCols=null,lastRows=null,lastKey='';
 
 // ===== API =====
 async function api(method,path,body){
@@ -17,6 +17,17 @@ function fmtDur(s){if(!s)return'-';const d=Math.floor(s/86400);s%=86440;const h=
 function roleBadge(r){const m={admin:'admin',developer:'developer',readonly:'readonly',auditor:'auditor'};return'<span class="role-badge role-'+m[r.toLowerCase()]+'">'+esc(r)+'</span>'}
 function fmtTime(t){if(!t)return'-';const d=new Date(t);return d.toLocaleString()}
 
+// ===== Init =====
+(function init(){
+  const savedUser=localStorage.getItem('sparkdb_user');
+  if(token&&savedUser){
+    document.getElementById('login-screen').style.display='none';
+    document.getElementById('app').style.display='flex';
+    document.getElementById('sidebar-user').textContent=savedUser;
+    nav('dashboard')
+  }
+})();
+
 // ===== Login =====
 document.getElementById('login-btn').addEventListener('click',login);
 document.getElementById('login-pass').addEventListener('keydown',e=>{if(e.key==='Enter')login()});
@@ -27,13 +38,15 @@ async function login(){
   const r=await api('POST','/auth/login',{username:u,password:p});
   if(r.error){msg(document.getElementById('login-error'),r.error);return}
   token=r.token;
+  localStorage.setItem('sparkdb_token',r.token);
+  localStorage.setItem('sparkdb_user',u);
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app').style.display='flex';
   document.getElementById('sidebar-user').textContent=u;
   nav('dashboard');loadDash()
 }
 
-document.getElementById('logout-btn').addEventListener('click',()=>{token='';currentDB='main';document.getElementById('app').style.display='none';document.getElementById('login-screen').style.display='flex';document.getElementById('login-user').value='';document.getElementById('login-pass').value='';document.getElementById('login-user').focus()});
+document.getElementById('logout-btn').addEventListener('click',()=>{token='';currentDB='main';localStorage.removeItem('sparkdb_token');localStorage.removeItem('sparkdb_user');document.getElementById('app').style.display='none';document.getElementById('login-screen').style.display='flex';document.getElementById('login-user').value='';document.getElementById('login-pass').value='';document.getElementById('login-user').focus()});
 
 // ===== Nav =====
 document.querySelectorAll('.nav-item').forEach(el=>{el.addEventListener('click',()=>nav(el.dataset.view))});
@@ -82,28 +95,6 @@ async function loadDash(){
   document.getElementById('dash-uptime').textContent=fmtDur(s.uptime_seconds);
   document.getElementById('dash-dbs-count').textContent=dbs.length;
 
-  const memPct=pct(s.alloc_mb||0,100);
-  const latPct=pct(s.avg_latency_ms||0,500);
-  const connPct=pct(s.active_conns||0,100);
-  const gorPct=pct(s.goroutines||0,200);
-  const failPct=pct(s.failed_logins||0,50);
-  const dbsPct=pct(dbs.length,20);
-
-  document.getElementById('dash-query-bar').style.width=pct(s.total_queries||0,5000)+'%';
-  document.getElementById('dash-mem-bar').style.width=memPct+'%';
-  document.getElementById('dash-lat-bar').style.width=latPct+'%';
-  document.getElementById('dash-conn-bar').style.width=connPct+'%';
-  document.getElementById('dash-gor-bar').style.width=gorPct+'%';
-  document.getElementById('dash-fail-bar').style.width=failPct+'%';
-  document.getElementById('dash-dbs-bar').style.width=dbsPct+'%';
-  document.getElementById('dash-mem-hint').textContent=memPct.toFixed(0)+'% of 100 MB';
-  document.getElementById('dash-lat-hint').textContent=latPct.toFixed(0)+'% of 500 ms';
-  document.getElementById('dash-conn-hint').textContent=connPct.toFixed(0)+'% of 100 max';
-  document.getElementById('dash-gor-hint').textContent=gorPct.toFixed(0)+'% of 200';
-  document.getElementById('dash-fail-hint').textContent=failPct.toFixed(0)+'% of 50 limit';
-  document.getElementById('dash-dbs-hint').textContent=dbsPct.toFixed(0)+'% of 20 max';
-
-  const dbs=s.databases||[];
   const stackedEl=document.getElementById('dash-db-stacked');
   const sizesEl=document.getElementById('dash-db-sizes');
 
@@ -236,19 +227,93 @@ document.getElementById('q-export-json').addEventListener('click',()=>{if(lastCo
 document.getElementById('q-export-json-pretty').addEventListener('click',()=>{if(lastCols)dl(fmtJSON(lastCols,lastRows,true),'export.json','application/json')});
 
 // ===== Databases =====
+let dbExpanded={};
+
 async function loadDBList(){
   const res=await api('GET','/databases');
   if(res.error){msg(document.getElementById('db-msg'),res.error);return}
   const tbody=document.getElementById('db-tbody');const dbs=res.databases||[];
-  if(!dbs.length){tbody.innerHTML='<tr><td colspan="3" class="dim" style="padding:24px;text-align:center">No databases</td></tr>';return}
+  if(!dbs.length){tbody.innerHTML='<tr><td colspan="5" class="dim" style="padding:24px;text-align:center">No databases</td></tr>';return}
+  const stats=await api('GET','/stats');
+  const sizeMap={};
+  if(stats.databases)stats.databases.forEach(d=>{sizeMap[d.name]=d.size});
+
   let h='';
   for(const db of dbs){
     const t=await api('POST','/query',{database:db,query:"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"});
     const c=t.rows&&t.rows[0]?t.rows[0][0]:'?';
-    h+='<tr><td class="mono">'+esc(db)+'</td><td>'+c+'</td><td class="actions"><button class="btn-ghost btn-xs" onclick="qSwitch(\''+escJS(db)+'\')">Query</button></td></tr>'
+    const sz=sizeMap[db]!==undefined?fmtBytes(sizeMap[db]):'-';
+    const exp=dbExpanded[db]?'open':'';
+    h+='<tr class="db-main-row" onclick="toggleDB(\''+escJS(db)+'\')"><td class="mono"><span class="db-chevron '+exp+'">\u25B6</span> '+esc(db)+'</td><td class="mono">'+sz+'</td><td>'+c+'</td><td class="actions">'+
+      '<button class="btn-ghost btn-xs" onclick="event.stopPropagation();qSwitch(\''+escJS(db)+'\')">Query</button>'+
+      '<button class="btn-ghost btn-xs" onclick="event.stopPropagation();showDropDB(\''+escJS(db)+'\')" style="color:var(--danger);margin-left:4px">Drop</button></td></tr>';
+    h+='<tr class="db-detail-row" id="db-detail-'+escJS(db)+'" style="display:'+(dbExpanded[db]?'table-row':'none')+'"><td colspan="4"><div class="db-detail" id="db-tables-'+escJS(db)+'"><span class="dim">loading...</span></div></td></tr>'
   }
-  tbody.innerHTML=h
+  tbody.innerHTML=h;
+  for(const db of dbs){if(dbExpanded[db])loadDBTables(db)}
 }
+
+async function loadDBTables(db){
+  const el=document.getElementById('db-tables-'+escJS(db));if(!el)return;
+  const tables=await api('POST','/query',{database:db,query:"SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"});
+  if(tables.error||!tables.rows||!tables.rows.length){el.innerHTML='<span class="dim">(no tables)</span>';return}
+  let h='<table class="tbl tbl-nested"><thead><tr><th>Table</th><th>Rows</th><th></th></tr></thead><tbody>';
+  for(const row of tables.rows){
+    const tn=row[0];
+    const rc=await api('POST','/query',{database:db,query:"SELECT COUNT(*) FROM "+JSON.stringify(tn)});
+    const rn=rc.rows&&rc.rows[0]?rc.rows[0][0]:'?';
+    h+='<tr><td class="mono">'+esc(tn)+'</td><td class="mono">'+rn+'</td><td class="actions">'+
+      '<button class="btn-ghost btn-xs" onclick="event.stopPropagation();exportTable(\''+escJS(db)+'\',\''+escJS(tn)+'\',\'csv\')">CSV</button>'+
+      '<button class="btn-ghost btn-xs" onclick="event.stopPropagation();exportTable(\''+escJS(db)+'\',\''+escJS(tn)+'\',\'json\')" style="margin-left:4px">JSON</button>'+
+      '<button class="btn-ghost btn-xs" onclick="event.stopPropagation();showDropTable(\''+escJS(db)+'\',\''+escJS(tn)+'\')" style="color:var(--danger);margin-left:4px">Drop</button></td></tr>'
+  }
+  h+='</tbody></table>';el.innerHTML=h
+}
+
+function toggleDB(db){
+  dbExpanded[db]=!dbExpanded[db];
+  const row=document.getElementById('db-detail-'+escJS(db));
+  if(row){row.style.display=dbExpanded[db]?'table-row':'none'}
+  const main=document.querySelector(`#db-tbody .db-main-row .db-chevron`);
+  if(dbExpanded[db])loadDBTables(db)
+}
+
+async function exportTable(db,table,fmt){
+  const r=await api('POST','/query',{database:db,query:"SELECT * FROM "+JSON.stringify(table)});
+  if(r.error){showModal('Error','<p>'+esc(r.error)+'</p>','<button class="btn btn-primary" onclick="closeModal()">OK</button>');return}
+  if(!r.columns||!r.columns.length){showModal('Error','<p>Table is empty</p>','<button class="btn btn-primary" onclick="closeModal()">OK</button>');return}
+  if(fmt==='csv')dl(fmtCSV(r.columns,r.rows||[]),table+'.csv','text/csv');
+  else dl(fmtJSON(r.columns,r.rows||[],false),table+'.json','application/json')
+}
+
+function showDropDB(db){
+  showModal('Drop Database',
+    '<p>Drop database <strong>'+esc(db)+'</strong>?</p><p style="color:var(--danger);font-weight:600">All data will be permanently deleted!</p>',
+    '<button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-danger" onclick="doDropDB(\''+escJS(db)+'\')">Drop</button>')
+}
+async function doDropDB(db){
+  closeModal();
+  const existing=await api('GET','/databases');
+  const others=(existing.databases||[]).filter(d=>d!==db);
+  if(!others.length){showModal('Error','<p>Cannot drop the last database</p>','<button class="btn btn-primary" onclick="closeModal()">OK</button>');return}
+  if(currentDB===db)currentDB=others[0];
+  const r=await api('POST','/query',{database:db,query:"SELECT 1"});
+  if(!r.error){showModal('Error','<p>Cannot drop database that is in use. Check server logs.</p>','<button class="btn btn-primary" onclick="closeModal()">OK</button>');return}
+  loadDBList()
+}
+
+function showDropTable(db,table){
+  showModal('Drop Table',
+    '<p>Drop table <strong>'+esc(table)+'</strong> from <strong>'+esc(db)+'</strong>?</p><p style="color:var(--danger);font-weight:600">All data in this table will be permanently deleted!</p>',
+    '<button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-danger" onclick="doDropTable(\''+escJS(db)+'\',\''+escJS(table)+'\')">Drop</button>')
+}
+async function doDropTable(db,table){
+  closeModal();
+  const r=await api('POST','/query',{database:db,query:"DROP TABLE IF EXISTS "+JSON.stringify(table)});
+  if(r.error){showModal('Error','<p>'+esc(r.error)+'</p>','<button class="btn btn-primary" onclick="closeModal()">OK</button>');return}
+  loadDBTables(db)
+}
+
 function qSwitch(db){currentDB=db;nav('query')}
 
 document.getElementById('db-create-btn').addEventListener('click',async()=>{
@@ -405,9 +470,11 @@ document.getElementById('apikey-create-btn').addEventListener('click',showCreate
 async function loadAPIKeys(){
   const r=await api('GET','/auth/api-keys');const tb=document.getElementById('apikey-tbody');
   document.getElementById('apikey-msg').style.display='none';
-  if(r.error){tb.innerHTML='<tr><td colspan="4" class="dim" style="padding:24px;text-align:center">'+esc(r.error)+'</td></tr>';return}
-  const ks=r.api_keys||[];if(!ks.length){tb.innerHTML='<tr><td colspan="4" class="dim" style="padding:24px;text-align:center">No API keys</td></tr>';return}
-  tb.innerHTML=ks.map(k=>'<tr><td><strong>'+esc(k.name)+'</strong></td><td class="mono">'+esc(k.prefix||'(legacy)')+'</td><td class="mono">'+fmtTime(k.created_at)+'</td><td class="actions"><button class="btn-ghost btn-xs" onclick="showDeleteAPIKey('+k.id+',\''+escJS(k.name)+'\')">Delete</button></td></tr>').join('')
+  if(r.error){tb.innerHTML='<tr><td colspan="5" class="dim" style="padding:24px;text-align:center">'+esc(r.error)+'</td></tr>';return}
+  const ks=r.api_keys||[];if(!ks.length){tb.innerHTML='<tr><td colspan="5" class="dim" style="padding:24px;text-align:center">No API keys</td></tr>';return}
+  tb.innerHTML=ks.map(k=>'<tr><td><strong>'+esc(k.name)+'</strong></td><td class="mono">'+esc(k.prefix||'(legacy)')+'</td><td class="mono">'+fmtTime(k.created_at)+'</td><td class="actions">'+
+    '<button class="btn-ghost btn-xs" onclick="showRevealAPIKey('+k.id+',\''+escJS(k.name)+'\')">Reveal</button>'+
+    '<button class="btn-ghost btn-xs" onclick="showDeleteAPIKey('+k.id+',\''+escJS(k.name)+'\')" style="color:var(--danger);margin-left:4px">Delete</button></td></tr>').join('')
 }
 
 function showCreateAPIKey(){
@@ -422,8 +489,9 @@ async function doCreateAPIKey(){
   document.getElementById('modal-key-msg').style.display='none';
   const r=await api('POST','/auth/api-keys',{name});
   if(r.error){msg(document.getElementById('modal-key-msg'),r.error);return}
+  lastKey=r.api_key;
   document.getElementById('modal-key-result').style.display='block';
-  document.getElementById('modal-key-result').innerHTML='<div style="font-size:12px;font-weight:600;margin:8px 0 4px;color:var(--success)">Key created — copy it now, it won\'t be shown again:</div>'+
+  document.getElementById('modal-key-result').innerHTML='<div style="font-size:12px;font-weight:600;margin:8px 0 4px;color:var(--success)">Key created — copy it now:</div>'+
     '<div class="key-reveal" style="margin:0">'+esc(r.api_key)+'<button class="copy-btn" onclick="copyKey(this)">Copy</button></div>';
   document.getElementById('modal-key-name').style.display='none';
   document.querySelector('#modal-footer .btn-primary').textContent='Done';
@@ -435,6 +503,28 @@ async function doCreateAPIKey(){
 function copyKey(btn){
   const text=btn.parentElement.textContent.replace('Copy','').trim();
   navigator.clipboard.writeText(text).then(()=>{btn.textContent='Copied!';setTimeout(()=>{btn.textContent='Copy'},2000)}).catch(()=>{})
+}
+
+function showRevealAPIKey(id,name){
+  showModal('Reveal API Key: '+esc(name),
+    '<label class="fld-lbl">Enter your password to reveal the full key:</label><input type="password" id="modal-reveal-pass" placeholder="Your password"><div id="modal-reveal-msg" class="msg msg-error" style="display:none;margin-top:8px"></div><div id="modal-reveal-result" style="display:none"></div>',
+    '<button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="doRevealAPIKey('+id+')">Reveal</button>');
+  setTimeout(()=>document.getElementById('modal-reveal-pass').focus(),100);
+  document.getElementById('modal-reveal-pass').addEventListener('keydown',function handler(e){if(e.key==='Enter'){e.preventDefault();doRevealAPIKey(id)}})
+}
+async function doRevealAPIKey(id){
+  const pass=document.getElementById('modal-reveal-pass').value;
+  if(!pass){msg(document.getElementById('modal-reveal-msg'),'Password required');return}
+  document.getElementById('modal-reveal-msg').style.display='none';
+  const r=await api('POST','/auth/api-keys/'+id+'/reveal',{password:pass});
+  if(r.error){msg(document.getElementById('modal-reveal-msg'),r.error);return}
+  document.getElementById('modal-reveal-result').style.display='block';
+  document.getElementById('modal-reveal-result').innerHTML='<div class="key-reveal" style="margin:8px 0 0">'+esc(r.api_key)+'<button class="copy-btn" onclick="copyKey(this)">Copy</button></div>';
+  document.getElementById('modal-reveal-pass').style.display='none';
+  document.querySelector('#modal-reveal-msg').style.display='none';
+  document.querySelector('#modal-footer .btn-primary').textContent='Done';
+  document.querySelector('#modal-footer .btn-primary').onclick=closeModal;
+  document.querySelector('#modal-footer .btn-ghost').style.display='none'
 }
 
 function showDeleteAPIKey(id,name){
@@ -452,9 +542,23 @@ async function doDeleteAPIKey(id){
 // ===== Backups =====
 async function loadBackups(){
   const res=await api('GET','/backups');const tb=document.getElementById('backup-tbody');
-  if(res.error){tb.innerHTML='<tr><td colspan="5" class="dim" style="padding:24px;text-align:center">'+esc(res.error)+'</td></tr>';return}
-  const bs=res.backups||[];if(!bs.length){tb.innerHTML='<tr><td colspan="5" class="dim" style="padding:24px;text-align:center">No backups</td></tr>';return}
-  tb.innerHTML=bs.map(b=>'<tr><td class="mono">'+esc(b.name)+'</td><td class="mono">'+esc(b.database)+'</td><td class="mono">'+fmtBytes(b.size)+'</td><td class="mono">'+fmtTime(b.created_at)+'</td><td class="actions"><button class="btn-ghost btn-xs" onclick="showRestoreConfirm(\''+escJS(b.name)+'\',\''+escJS(b.database)+'\')">Restore</button></td></tr>').join('')
+  if(res.error){tb.innerHTML='<tr><td colspan="6" class="dim" style="padding:24px;text-align:center">'+esc(res.error)+'</td></tr>';return}
+  const bs=res.backups||[];if(!bs.length){tb.innerHTML='<tr><td colspan="6" class="dim" style="padding:24px;text-align:center">No backups</td></tr>';return}
+  tb.innerHTML=bs.map(b=>'<tr><td class="mono">'+esc(b.name)+'</td><td class="mono">'+esc(b.database)+'</td><td class="mono">'+fmtBytes(b.size)+'</td><td class="mono">'+fmtTime(b.created_at)+'</td><td class="actions">'+
+    '<button class="btn-ghost btn-xs" onclick="showRestoreConfirm(\''+escJS(b.name)+'\',\''+escJS(b.database)+'\')">Restore</button>'+
+    '<button class="btn-ghost btn-xs" onclick="showDeleteBackup(\''+escJS(b.name)+'\')" style="color:var(--danger);margin-left:4px">Delete</button></td></tr>').join('')
+}
+
+function showDeleteBackup(name){
+  showModal('Delete Backup',
+    '<p>Delete backup <strong>'+esc(name)+'</strong>?</p><p style="color:var(--danger);font-weight:600">This cannot be undone!</p>',
+    '<button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-danger" onclick="doDeleteBackup(\''+escJS(name)+'\')">Delete</button>')
+}
+async function doDeleteBackup(name){
+  closeModal();
+  const r=await api('DELETE','/backups/'+encodeURIComponent(name));
+  if(r.error){showModal('Error','<p>'+esc(r.error)+'</p>','<button class="btn btn-primary" onclick="closeModal()">OK</button>');return}
+  loadBackups()
 }
 async function loadBackupDBs(){const r=await api('GET','/databases');const s=document.getElementById('backup-db-select');if(r.databases)s.innerHTML=r.databases.map(d=>'<option value="'+escJS(d)+'">'+esc(d)+'</option>').join('')}
 document.getElementById('backup-create-btn').addEventListener('click',async()=>{const d=document.getElementById('backup-db-select').value;const r=await api('POST','/backup',{database:d});if(r.error){msg(document.getElementById('backup-msg'),r.error);return}msg(document.getElementById('backup-msg'),"Backup created: "+(r.name||''),'success');loadBackups()});

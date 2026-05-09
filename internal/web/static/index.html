@@ -61,14 +61,14 @@
     <section data-view="dashboard" class="view active">
       <div class="ph"><h2>Dashboard</h2></div>
       <div class="sc-grid" id="dash-cards">
-        <div class="sc"><div class="sc-val"><span class="sc-num" id="dash-queries">-</span><span class="sc-unit">total</span></div><span class="sc-lbl">Queries Executed</span><div class="meter"><div class="meter-fill meter-fill-blue" id="dash-query-bar" style="width:0%"></div></div><span class="sc-hint">lifetime</span></div>
-        <div class="sc"><div class="sc-val"><span class="sc-num" id="dash-memory">-</span><span class="sc-unit">MB</span></div><span class="sc-lbl">Memory Usage</span><div class="meter"><div class="meter-fill meter-fill-purple" id="dash-mem-bar" style="width:0%"></div></div><span class="sc-hint" id="dash-mem-hint">of 100 MB</span></div>
-        <div class="sc"><div class="sc-val"><span class="sc-num" id="dash-latency">-</span><span class="sc-unit">ms</span></div><span class="sc-lbl">Avg Latency</span><div class="meter"><div class="meter-fill meter-fill-orange" id="dash-lat-bar" style="width:0%"></div></div><span class="sc-hint" id="dash-lat-hint">of 500 ms</span></div>
-        <div class="sc"><div class="sc-val"><span class="sc-num" id="dash-conns">-</span><span class="sc-unit">conn</span></div><span class="sc-lbl">Active Conns</span><div class="meter"><div class="meter-fill meter-fill-cyan" id="dash-conn-bar" style="width:0%"></div></div><span class="sc-hint" id="dash-conn-hint">of 100 max</span></div>
-        <div class="sc"><div class="sc-val"><span class="sc-num" id="dash-goroutines">-</span><span class="sc-unit">active</span></div><span class="sc-lbl">Goroutines</span><div class="meter"><div class="meter-fill meter-fill-pink" id="dash-gor-bar" style="width:0%"></div></div><span class="sc-hint" id="dash-gor-hint">of 200</span></div>
-        <div class="sc"><div class="sc-val"><span class="sc-num" id="dash-failed-logins">-</span><span class="sc-unit">failed</span></div><span class="sc-lbl">Failed Logins</span><div class="meter"><div class="meter-fill meter-fill-red" id="dash-fail-bar" style="width:0%"></div></div><span class="sc-hint" id="dash-fail-hint">of 50 limit</span></div>
-        <div class="sc"><div class="sc-val"><span class="sc-num" id="dash-uptime">-</span><span class="sc-unit">uptime</span></div><span class="sc-lbl">Server Uptime</span><div class="meter"><div class="meter-fill meter-fill-green" style="width:100%"></div></div><span class="sc-hint">since last restart</span></div>
-        <div class="sc"><div class="sc-val"><span class="sc-num" id="dash-dbs-count">-</span><span class="sc-unit">dbs</span></div><span class="sc-lbl">Databases</span><div class="meter"><div class="meter-fill meter-fill-blue" id="dash-dbs-bar" style="width:0%"></div></div><span class="sc-hint" id="dash-dbs-hint">attached</span></div>
+        <div class="sc"><div class="sc-a sc-a-blue"></div><span class="sc-num" id="dash-queries">-</span><span class="sc-lbl">Queries Executed</span></div>
+        <div class="sc"><div class="sc-a sc-a-purple"></div><span class="sc-num" id="dash-memory">-</span><span class="sc-lbl">Memory Usage</span></div>
+        <div class="sc"><div class="sc-a sc-a-orange"></div><span class="sc-num" id="dash-latency">-</span><span class="sc-lbl">Avg Latency</span></div>
+        <div class="sc"><div class="sc-a sc-a-cyan"></div><span class="sc-num" id="dash-conns">-</span><span class="sc-lbl">Active Conns</span></div>
+        <div class="sc"><div class="sc-a sc-a-pink"></div><span class="sc-num" id="dash-goroutines">-</span><span class="sc-lbl">Goroutines</span></div>
+        <div class="sc"><div class="sc-a sc-a-red"></div><span class="sc-num" id="dash-failed-logins">-</span><span class="sc-lbl">Failed Logins</span></div>
+        <div class="sc"><div class="sc-a sc-a-green"></div><span class="sc-num" id="dash-uptime">-</span><span class="sc-lbl">Server Uptime</span></div>
+        <div class="sc"><div class="sc-a sc-a-blue"></div><span class="sc-num" id="dash-dbs-count">-</span><span class="sc-lbl">Databases</span></div>
       </div>
       <div class="row" style="gap:16px;margin-top:16px">
         <div class="col" style="flex:1">
@@ -130,7 +130,7 @@
         </div>
       </div>
       <div id="db-msg" class="msg" style="display:none"></div>
-      <table class="tbl"><thead><tr><th>Name</th><th>Tables</th><th></th></tr></thead><tbody id="db-tbody"></tbody></table>
+      <table class="tbl"><thead><tr><th>Name</th><th>Size</th><th>Tables</th><th></th></tr></thead><tbody id="db-tbody"></tbody></table>
     </section>
 
     <!-- ===== IMPORT ===== -->
@@ -195,6 +195,7 @@
       <div id="apikey-reveal" style="display:none"></div>
       <div id="apikey-msg" class="msg" style="display:none"></div>
       <table class="tbl"><thead><tr><th>Name</th><th>Key Prefix</th><th>Created</th><th></th></tr></thead><tbody id="apikey-tbody"></tbody></table>
+      <p class="dim" style="margin-top:8px">Key is shown once on creation. To see it again, click Reveal and enter your password.</p>
     </section>
 
     <!-- ===== BACKUPS ===== -->
