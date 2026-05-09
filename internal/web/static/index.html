@@ -4,50 +4,69 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SparkDB Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 
 <div id="login-screen">
   <div class="login-card">
-    <div class="login-logo">SparkDB</div>
+    <svg class="login-logo" width="40" height="40" viewBox="0 0 40 40" fill="none"><rect x="4" y="4" width="14" height="14" rx="3" fill="currentColor" opacity=".25"/><rect x="22" y="4" width="14" height="14" rx="3" fill="currentColor" opacity=".5"/><rect x="4" y="22" width="14" height="14" rx="3" fill="currentColor" opacity=".5"/><rect x="22" y="22" width="14" height="14" rx="3" fill="currentColor"/></svg>
+    <h1 class="login-title">SparkDB</h1>
     <p class="login-sub">Web Console</p>
-    <input type="text" id="login-user" placeholder="Username" autocomplete="username" autofocus>
-    <input type="password" id="login-pass" placeholder="Password" autocomplete="current-password">
+    <div class="login-fields">
+      <input type="text" id="login-user" placeholder="Username" autocomplete="username" autofocus>
+      <input type="password" id="login-pass" placeholder="Password" autocomplete="current-password">
+    </div>
     <div id="login-error" class="msg msg-error" style="display:none"></div>
-    <button id="login-btn">Sign In</button>
+    <button id="login-btn" class="btn btn-primary btn-full">Sign In</button>
   </div>
 </div>
 
 <div id="app" style="display:none">
   <aside class="sidebar">
-    <div class="sidebar-head">SparkDB</div>
+    <div class="sidebar-head">
+      <svg width="22" height="22" viewBox="0 0 40 40" fill="none"><rect x="4" y="4" width="14" height="14" rx="3" fill="currentColor" opacity=".3"/><rect x="22" y="4" width="14" height="14" rx="3" fill="currentColor" opacity=".5"/><rect x="4" y="22" width="14" height="14" rx="3" fill="currentColor" opacity=".5"/><rect x="22" y="22" width="14" height="14" rx="3" fill="currentColor"/></svg>
+      <span>SparkDB</span>
+    </div>
     <nav class="sidebar-nav">
-      <a class="nav-item active" data-view="dashboard">
-        <span class="nav-icon">&#9632;</span> Dashboard
+      <a class="nav-item active" data-view="dashboard" title="Dashboard">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Dashboard
       </a>
-      <a class="nav-item" data-view="query">
-        <span class="nav-icon">&#9654;</span> Query
+      <a class="nav-item" data-view="query" title="Query">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+        Query
       </a>
-      <a class="nav-item" data-view="databases">
-        <span class="nav-icon">&#9670;</span> Databases
+      <a class="nav-item" data-view="databases" title="Databases">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+        Databases
       </a>
-      <a class="nav-item" data-view="users">
-        <span class="nav-icon">&#9679;</span> Users
+      <a class="nav-item" data-view="import" title="Import">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Import
       </a>
-      <a class="nav-item" data-view="backups">
-        <span class="nav-icon">&#9651;</span> Backups
+      <a class="nav-item" data-view="users" title="Users">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Users
       </a>
-      <a class="nav-item" data-view="audit">
-        <span class="nav-icon">&#9776;</span> Audit Log
+      <a class="nav-item" data-view="backups" title="Backups">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Backups
       </a>
-      <a class="nav-item" data-view="stats">
-        <span class="nav-icon">&#9733;</span> Stats
+      <a class="nav-item" data-view="audit" title="Audit Log">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        Audit Log
+      </a>
+      <a class="nav-item" data-view="stats" title="Stats">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        Stats
       </a>
     </nav>
     <div class="sidebar-foot">
       <span id="sidebar-user" class="sidebar-user"></span>
-      <button id="logout-btn" class="btn-ghost btn-sm">Sign Out</button>
+      <button id="logout-btn" class="btn-ghost btn-xs">Sign Out</button>
     </div>
   </aside>
 
@@ -55,40 +74,39 @@
 
     <!-- ===== Dashboard ===== -->
     <section data-view="dashboard" class="view active">
-      <h2>Dashboard</h2>
-      <div class="stat-grid" id="dash-cards">
-        <div class="stat-card"><div class="stat-num" id="dash-uptime">-</div><div class="stat-label">Uptime</div></div>
-        <div class="stat-card"><div class="stat-num" id="dash-queries">-</div><div class="stat-label">Total Queries</div></div>
-        <div class="stat-card"><div class="stat-num" id="dash-conns">-</div><div class="stat-label">Connections</div></div>
-        <div class="stat-card"><div class="stat-num" id="dash-goroutines">-</div><div class="stat-label">Goroutines</div></div>
-        <div class="stat-card"><div class="stat-num" id="dash-memory">-</div><div class="stat-label">Memory</div></div>
-        <div class="stat-card"><div class="stat-num" id="dash-latency">-</div><div class="stat-label">Avg Latency</div></div>
+      <div class="page-head"><h2>Dashboard</h2></div>
+      <div class="stat-row" id="dash-cards">
+        <div class="stat-card"><span class="stat-val" id="dash-uptime">-</span><span class="stat-lbl">Uptime</span></div>
+        <div class="stat-card"><span class="stat-val" id="dash-queries">-</span><span class="stat-lbl">Queries</span></div>
+        <div class="stat-card"><span class="stat-val" id="dash-conns">-</span><span class="stat-lbl">Connections</span></div>
+        <div class="stat-card"><span class="stat-val" id="dash-goroutines">-</span><span class="stat-lbl">Goroutines</span></div>
+        <div class="stat-card"><span class="stat-val" id="dash-memory">-</span><span class="stat-lbl">Memory</span></div>
+        <div class="stat-card"><span class="stat-val" id="dash-latency">-</span><span class="stat-lbl">Latency</span></div>
       </div>
-      <div class="card"><h3>Database Sizes</h3><div id="dash-db-sizes"><p class="muted">No data</p></div></div>
+      <div class="card"><div class="card-title">Database Sizes</div><div id="dash-db-sizes"><p class="dim">No data</p></div></div>
     </section>
 
     <!-- ===== Query ===== -->
     <section data-view="query" class="view">
-      <div class="query-layout">
-        <div class="query-sidebar">
-          <div class="qs-head">
-            <span>Databases</span>
-            <button id="q-refresh-dbs" class="btn-icon" title="Refresh">&#x21bb;</button>
-          </div>
+      <div class="query-split">
+        <div class="q-sidebar">
+          <div class="qs-head">Databases <button id="q-refresh-dbs" class="btn-icon" title="Refresh">&#x21bb;</button></div>
           <div id="q-db-list"></div>
-          <div class="qs-head" style="margin-top:12px">
-            <span>Tables</span>
-            <button id="q-refresh-tables" class="btn-icon" title="Refresh">&#x21bb;</button>
-          </div>
-          <div id="q-table-list"><span class="muted">select a database</span></div>
+          <div class="qs-head" style="margin-top:16px">Tables <button id="q-refresh-tables" class="btn-icon" title="Refresh">&#x21bb;</button></div>
+          <div id="q-table-list"><span class="dim">select a database</span></div>
         </div>
-        <div class="query-main">
-          <div class="query-toolbar">
-            <span class="db-badge">db: <b id="q-current-db">main</b></span>
+        <div class="q-body">
+          <div class="q-toolbar">
+            <span class="db-badge"><span class="dim">db:</span> <b id="q-current-db">main</b></span>
+            <div class="q-export-btns" id="q-export-bar" style="display:none">
+              <button class="btn-ghost btn-xs" id="q-export-csv">CSV</button>
+              <button class="btn-ghost btn-xs" id="q-export-json">JSON</button>
+              <button class="btn-ghost btn-xs" id="q-export-json-pretty">JSON pretty</button>
+            </div>
           </div>
-          <textarea id="q-input" rows="5" placeholder="Enter SQL… (Ctrl+Enter to run)" spellcheck="false"></textarea>
+          <textarea id="q-input" rows="4" placeholder="Enter SQL…  (Ctrl+Enter to run)" spellcheck="false"></textarea>
           <div class="q-actions">
-            <button id="q-run" class="btn">Run</button>
+            <button id="q-run" class="btn btn-primary">Run</button>
             <button id="q-clear" class="btn-ghost">Clear</button>
             <span id="q-time" class="q-time"></span>
           </div>
@@ -101,27 +119,45 @@
 
     <!-- ===== Databases ===== -->
     <section data-view="databases" class="view">
-      <div class="flex-between">
-        <h2>Databases</h2>
-        <div class="flex-row gap-8">
-          <input type="text" id="db-create-input" placeholder="new db name" class="input-sm">
-          <button id="db-create-btn" class="btn">Create</button>
+      <div class="page-head"><h2>Databases</h2></div>
+      <div class="card card-flush" style="margin-bottom:16px">
+        <div class="form-inline">
+          <input type="text" id="db-create-input" placeholder="Database name">
+          <button id="db-create-btn" class="btn btn-primary">Create</button>
         </div>
       </div>
       <div id="db-msg" class="msg" style="display:none"></div>
-      <table class="data-table" id="db-table">
+      <table class="tbl">
         <thead><tr><th>Name</th><th>Tables</th><th></th></tr></thead>
         <tbody id="db-tbody"></tbody>
       </table>
     </section>
 
+    <!-- ===== Import ===== -->
+    <section data-view="import" class="view">
+      <div class="page-head"><h2>Import Data</h2></div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Import CSV or JSON</div>
+        <div class="form-row" style="margin-bottom:12px">
+          <input type="text" id="imp-table" placeholder="Table name" style="flex:1">
+          <select id="imp-format">
+            <option value="csv">CSV</option>
+            <option value="json">JSON</option>
+          </select>
+          <button id="imp-preview-btn" class="btn-ghost">Preview</button>
+        </div>
+        <textarea id="imp-data" rows="8" placeholder="Paste CSV or JSON data here…" spellcheck="false" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--mono);font-size:12px;line-height:1.5;resize:vertical;outline:none;background:var(--surface);min-height:120px"></textarea>
+        <div id="imp-preview" style="margin-top:12px;overflow:auto;display:none"></div>
+        <div id="imp-msg" class="msg" style="display:none;margin-top:8px"></div>
+        <button id="imp-execute-btn" class="btn btn-primary" style="margin-top:12px" disabled>Import</button>
+      </div>
+    </section>
+
     <!-- ===== Users ===== -->
     <section data-view="users" class="view">
-      <div class="flex-between">
-        <h2>Users</h2>
-        <button id="users-show-form" class="btn">+ New User</button>
-      </div>
+      <div class="page-head"><h2>Users</h2><button id="users-show-btn" class="btn btn-primary">+ New User</button></div>
       <div id="users-form" class="card" style="display:none;margin-bottom:16px">
+        <div class="card-title">Create User</div>
         <div class="form-row">
           <input type="text" id="users-username" placeholder="Username">
           <input type="password" id="users-password" placeholder="Password">
@@ -131,11 +167,11 @@
             <option value="readonly">readonly</option>
             <option value="auditor">auditor</option>
           </select>
-          <button id="users-create-btn" class="btn">Create</button>
+          <button id="users-create-btn" class="btn btn-primary">Create</button>
         </div>
         <div id="users-msg" class="msg" style="display:none;margin-top:8px"></div>
       </div>
-      <table class="data-table">
+      <table class="tbl">
         <thead><tr><th>ID</th><th>Username</th><th>Role</th></tr></thead>
         <tbody id="users-tbody"></tbody>
       </table>
@@ -143,60 +179,53 @@
 
     <!-- ===== Backups ===== -->
     <section data-view="backups" class="view">
-      <div class="flex-between">
-        <h2>Backups</h2>
-        <div class="flex-row gap-8">
-          <select id="backup-db-select" class="input-sm"></select>
-          <button id="backup-create-btn" class="btn">Create Backup</button>
+      <div class="page-head"><h2>Backups</h2></div>
+      <div class="card card-flush" style="margin-bottom:16px">
+        <div class="form-inline">
+          <select id="backup-db-select" style="flex:1"></select>
+          <button id="backup-create-btn" class="btn btn-primary">Create Backup</button>
         </div>
       </div>
       <div id="backup-msg" class="msg" style="display:none"></div>
-      <table class="data-table">
+      <table class="tbl">
         <thead><tr><th>Name</th><th>Database</th><th>Size</th><th>Created</th><th></th></tr></thead>
         <tbody id="backup-tbody"></tbody>
       </table>
       <div class="card" style="margin-top:16px">
-        <h3>Restore Backup</h3>
+        <div class="card-title">Restore Backup</div>
         <div class="form-row">
-          <input type="text" id="restore-file" placeholder="Backup file name" class="flex-1">
-          <input type="text" id="restore-db" placeholder="Target database" class="flex-1" value="main">
+          <input type="text" id="restore-file" placeholder="Backup filename" style="flex:1">
+          <input type="text" id="restore-db" placeholder="Target database" style="flex:1" value="main">
           <button id="restore-btn" class="btn btn-danger">Restore</button>
         </div>
         <div id="restore-msg" class="msg" style="display:none;margin-top:8px"></div>
       </div>
     </section>
 
-    <!-- ===== Audit Log ===== -->
+    <!-- ===== Audit ===== -->
     <section data-view="audit" class="view">
-      <div class="flex-between">
-        <h2>Audit Log</h2>
-        <button id="audit-refresh" class="btn-icon" title="Refresh">&#x21bb;</button>
-      </div>
-      <table class="data-table">
+      <div class="page-head"><h2>Audit Log</h2><button id="audit-refresh" class="btn-icon" title="Refresh">&#x21bb;</button></div>
+      <div style="overflow-x:auto">
+      <table class="tbl">
         <thead><tr><th>ID</th><th>User</th><th>Action</th><th>Endpoint</th><th>Status</th><th>Time</th></tr></thead>
         <tbody id="audit-tbody"></tbody>
       </table>
+      </div>
     </section>
 
     <!-- ===== Stats ===== -->
     <section data-view="stats" class="view">
-      <div class="flex-between">
-        <h2>Server Stats</h2>
-        <button id="stats-refresh" class="btn-icon" title="Refresh">&#x21bb;</button>
+      <div class="page-head"><h2>Server Stats</h2><button id="stats-refresh" class="btn-icon" title="Refresh">&#x21bb;</button></div>
+      <div class="stat-row" id="stats-cards">
+        <div class="stat-card"><span class="stat-val" id="stat-uptime">-</span><span class="stat-lbl">Uptime</span></div>
+        <div class="stat-card"><span class="stat-val" id="stat-queries">-</span><span class="stat-lbl">Queries</span></div>
+        <div class="stat-card"><span class="stat-val" id="stat-conns">-</span><span class="stat-lbl">Connections</span></div>
+        <div class="stat-card"><span class="stat-val" id="stat-goroutines">-</span><span class="stat-lbl">Goroutines</span></div>
+        <div class="stat-card"><span class="stat-val" id="stat-memory">-</span><span class="stat-lbl">Memory</span></div>
+        <div class="stat-card"><span class="stat-val" id="stat-latency">-</span><span class="stat-lbl">Latency</span></div>
+        <div class="stat-card"><span class="stat-val" id="stat-failed-logins">-</span><span class="stat-lbl">Failed Logins</span></div>
       </div>
-      <div class="stat-grid" id="stats-cards">
-        <div class="stat-card"><div class="stat-num" id="stat-uptime">-</div><div class="stat-label">Uptime</div></div>
-        <div class="stat-card"><div class="stat-num" id="stat-queries">-</div><div class="stat-label">Total Queries</div></div>
-        <div class="stat-card"><div class="stat-num" id="stat-conns">-</div><div class="stat-label">Active Connections</div></div>
-        <div class="stat-card"><div class="stat-num" id="stat-goroutines">-</div><div class="stat-label">Goroutines</div></div>
-        <div class="stat-card"><div class="stat-num" id="stat-memory">-</div><div class="stat-label">Memory (MB)</div></div>
-        <div class="stat-card"><div class="stat-num" id="stat-latency">-</div><div class="stat-label">Avg Latency</div></div>
-        <div class="stat-card"><div class="stat-num" id="stat-failed-logins">-</div><div class="stat-label">Failed Logins</div></div>
-      </div>
-      <div class="card" style="margin-top:16px">
-        <h3>Database Sizes</h3>
-        <div id="stats-db-sizes"><p class="muted">No data</p></div>
-      </div>
+      <div class="card"><div class="card-title">Database Sizes</div><div id="stats-db-sizes"><p class="dim">No data</p></div></div>
     </section>
 
   </main>

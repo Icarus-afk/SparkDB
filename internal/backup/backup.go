@@ -80,6 +80,12 @@ func (bm *Manager) CreateBackup(dbName string) (*BackupInfo, error) {
 }
 
 func (bm *Manager) RestoreBackup(backupFile, dbName string) error {
+	if _, err := os.Stat(backupFile); os.IsNotExist(err) {
+		resolved := filepath.Join(bm.backupDir, backupFile)
+		if _, err2 := os.Stat(resolved); err2 == nil {
+			backupFile = resolved
+		}
+	}
 	info, err := os.Stat(backupFile)
 	if err != nil {
 		return fmt.Errorf("backup file not found: %w", err)
