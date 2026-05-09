@@ -29,8 +29,8 @@ func init() {
 	}
 	exportCmd.Flags().StringVar(&exportHost, "host", "localhost", "server host")
 	exportCmd.Flags().IntVar(&exportPort, "port", 9600, "server port")
-	exportCmd.Flags().StringVar(&exportUser, "user", "admin", "login username")
-	exportCmd.Flags().StringVar(&exportPass, "pass", "admin", "login password")
+	exportCmd.Flags().StringVar(&exportUser, "user", "", "login username")
+	exportCmd.Flags().StringVar(&exportPass, "pass", "", "login password")
 	exportCmd.Flags().StringVar(&exportAPIKey, "api-key", "", "API key (alternative to user/pass)")
 	exportCmd.Flags().StringVar(&exportDB, "db", "main", "target database")
 	exportCmd.Flags().StringVar(&exportFormat, "format", "", "output format (csv or json); defaults to csv")
@@ -53,6 +53,9 @@ func runExport(cmd *cobra.Command, args []string) error {
 	if exportAPIKey != "" {
 		c.SetAPIKey(exportAPIKey)
 	} else {
+		if exportUser == "" || exportPass == "" {
+			return fmt.Errorf("credentials required: use --user and --pass, or --api-key")
+		}
 		if err := c.Login(exportUser, exportPass); err != nil {
 			return fmt.Errorf("login: %w", err)
 		}

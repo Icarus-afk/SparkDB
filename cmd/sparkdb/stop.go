@@ -23,8 +23,8 @@ func init() {
 	}
 	stopCmd.Flags().StringVar(&stopHost, "host", "localhost", "server host")
 	stopCmd.Flags().IntVar(&stopPort, "port", 9600, "server port")
-	stopCmd.Flags().StringVar(&stopUser, "user", "admin", "login username")
-	stopCmd.Flags().StringVar(&stopPass, "pass", "admin", "login password")
+	stopCmd.Flags().StringVar(&stopUser, "user", "", "login username")
+	stopCmd.Flags().StringVar(&stopPass, "pass", "", "login password")
 	stopCmd.Flags().StringVar(&stopAPIKey, "api-key", "", "API key (alternative to user/pass)")
 	rootCmd.AddCommand(stopCmd)
 }
@@ -35,6 +35,9 @@ func runStop(cmd *cobra.Command, args []string) error {
 
 	token := stopAPIKey
 	if token == "" {
+		if stopUser == "" || stopPass == "" {
+			return fmt.Errorf("credentials required: use --user and --pass, or --api-key")
+		}
 		body := fmt.Sprintf(`{"username":"%s","password":"%s"}`, stopUser, stopPass)
 		resp, err := client.Post(baseURL+"/auth/login", "application/json", strings.NewReader(body))
 		if err != nil {

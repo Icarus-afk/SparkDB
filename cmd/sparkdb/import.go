@@ -31,8 +31,8 @@ func init() {
 	}
 	importCmd.Flags().StringVar(&importHost, "host", "localhost", "server host")
 	importCmd.Flags().IntVar(&importPort, "port", 9600, "server port")
-	importCmd.Flags().StringVar(&importUser, "user", "admin", "login username")
-	importCmd.Flags().StringVar(&importPass, "pass", "admin", "login password")
+	importCmd.Flags().StringVar(&importUser, "user", "", "login username")
+	importCmd.Flags().StringVar(&importPass, "pass", "", "login password")
 	importCmd.Flags().StringVar(&importAPIKey, "api-key", "", "API key (alternative to user/pass)")
 	importCmd.Flags().StringVar(&importDB, "db", "main", "target database")
 	importCmd.Flags().StringVar(&importFormat, "format", "", "input format (csv, json, sql); inferred from extension if not set")
@@ -61,6 +61,9 @@ func runImport(cmd *cobra.Command, args []string) error {
 	if importAPIKey != "" {
 		c.SetAPIKey(importAPIKey)
 	} else {
+		if importUser == "" || importPass == "" {
+			return fmt.Errorf("credentials required: use --user and --pass, or --api-key")
+		}
 		if err := c.Login(importUser, importPass); err != nil {
 			return fmt.Errorf("login: %w", err)
 		}

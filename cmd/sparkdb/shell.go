@@ -39,8 +39,8 @@ Meta-commands:
 	}
 	shellCmd.Flags().StringVar(&shellHost, "host", "localhost", "server host")
 	shellCmd.Flags().IntVar(&shellPort, "port", 9600, "server port")
-	shellCmd.Flags().StringVar(&shellUser, "user", "admin", "login username")
-	shellCmd.Flags().StringVar(&shellPass, "pass", "admin", "login password")
+	shellCmd.Flags().StringVar(&shellUser, "user", "", "login username")
+	shellCmd.Flags().StringVar(&shellPass, "pass", "", "login password")
 	shellCmd.Flags().StringVar(&shellAPIKey, "api-key", "", "API key (alternative to user/pass)")
 	shellCmd.Flags().StringVar(&shellDB, "db", "main", "target database")
 	shellCmd.Flags().StringVar(&shellOneLine, "command", "", "run a single query and exit (non-interactive)")
@@ -58,8 +58,8 @@ Meta-commands:
 	}
 	queryCmd.Flags().StringVar(&shellHost, "host", "localhost", "server host")
 	queryCmd.Flags().IntVar(&shellPort, "port", 9600, "server port")
-	queryCmd.Flags().StringVar(&shellUser, "user", "admin", "login username")
-	queryCmd.Flags().StringVar(&shellPass, "pass", "admin", "login password")
+	queryCmd.Flags().StringVar(&shellUser, "user", "", "login username")
+	queryCmd.Flags().StringVar(&shellPass, "pass", "", "login password")
 	queryCmd.Flags().StringVar(&shellAPIKey, "api-key", "", "API key (alternative to user/pass)")
 	queryCmd.Flags().StringVar(&shellDB, "db", "main", "target database")
 	rootCmd.AddCommand(queryCmd)
@@ -71,6 +71,9 @@ func runShell(cmd *cobra.Command, args []string) error {
 	if shellAPIKey != "" {
 		c.SetAPIKey(shellAPIKey)
 	} else {
+		if shellUser == "" || shellPass == "" {
+			return fmt.Errorf("credentials required: use --user and --pass, or --api-key")
+		}
 		if err := c.Login(shellUser, shellPass); err != nil {
 			return fmt.Errorf("login: %w", err)
 		}
@@ -209,7 +212,7 @@ func handleMeta(c *client.Client, line string) bool {
 			fmt.Println("Usage: \\d <table_name>")
 			return true
 		}
-		res, err := c.Query(shellDB, "PRAGMA table_info("+parts[1]+")")
+		res, err := c.Query(shellDB, "PRAGMA table_info("+quoteIdent(parts[1])+")")
 		if err != nil {
 			fmt.Printf("Error: %s\n", err)
 			return true
