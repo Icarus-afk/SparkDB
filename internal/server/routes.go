@@ -485,6 +485,75 @@ func (h *Handler) HandleRestore(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"message": "restore completed", "database": req.Database})
 }
 
+func (h *Handler) HandleDeleteBackup(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	if user == nil || !rbac.HasPermission(rbac.Role(user.Role), rbac.PermBackup) {
+		writeJSON(w, http.StatusForbidden, api.ErrorResponse{Error: "only admins can delete backups", Code: 403})
+		return
+	}
+
+	name := r.PathValue("name")
+	if name == "" {
+		writeJSON(w, http.StatusBadRequest, api.ErrorResponse{Error: "backup name is required", Code: 400})
+		return
+	}
+
+	backups, err := h.backupMgr.ListBackups()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, api.ErrorResponse{Error: err.Error(), Code: 500})
+		return
+	}
+
+	for _, b := range backups {
+		if b.Name == name {
+			if err := h.backupMgr.DeleteBackup(b.Path); err != nil {
+				writeJSON(w, http.StatusInternalServerError, api.ErrorResponse{Error: err.Error(), Code: 500})
+				return
+			}
+			h.logAudit(user, r, "delete_backup:"+name, "/backups/"+name, "success")
+			writeJSON(w, http.StatusOK, map[string]string{"message": "backup deleted"})
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusNotFound, api.ErrorResponse{Error: "backup not found", Code: 404})
+}
+
+func (h *Handler) HandleRevealAPIKey(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	if user == nil {
+		writeJSON(w, http.StatusUnauthorized, api.ErrorResponse{Error: "unauthorized", Code: 401})
+		return
+	}
+
+	idStr := r.PathValue("id")
+	var id int64
+	if _, err := fmt.Sscanf(idStr, "%d", &id); err != nil {
+		writeJSON(w, http.StatusBadRequest, api.ErrorResponse{Error: "invalid id", Code: 400})
+		return
+	}
+
+	var req struct {
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, api.ErrorResponse{Error: "invalid request body", Code: 400})
+		return
+	}
+	if req.Password == "" {
+		writeJSON(w, http.StatusBadRequest, api.ErrorResponse{Error: "password is required", Code: 400})
+		return
+	}
+
+	rawKey, err := h.authenticator.RevealAPIKey(id, req.Password)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, api.ErrorResponse{Error: err.Error(), Code: 401})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"api_key": rawKey})
+}
+
 func (h *Handler) HandleListBackups(w http.ResponseWriter, r *http.Request) {
 	user := auth.UserFromContext(r.Context())
 	if user == nil || !rbac.HasPermission(rbac.Role(user.Role), rbac.PermBackup) {
