@@ -18,19 +18,23 @@ var shellUser string
 var shellPass string
 var shellAPIKey string
 var shellDB string
+var shellOneLine string
 
 func init() {
 	shellCmd := &cobra.Command{
 		Use:   "shell",
 		Short: "Interactive SQL shell",
+		SilenceUsage: true,
 		Long: `Start an interactive SQL shell connected to a SparkDB server.
-		
+
 Meta-commands:
-  \q        quit
-  \dt       list tables
-  \d <name> describe table
-  \db       list databases
-  \?        help`,
+  \q          quit
+  \dt         list tables
+  \d <name>   describe table
+  \use <db>   switch database
+  \db         show current database
+  \list       list all databases
+  \?          help`,
 		RunE: runShell,
 	}
 	shellCmd.Flags().StringVar(&shellHost, "host", "localhost", "server host")
@@ -39,7 +43,26 @@ Meta-commands:
 	shellCmd.Flags().StringVar(&shellPass, "pass", "admin", "login password")
 	shellCmd.Flags().StringVar(&shellAPIKey, "api-key", "", "API key (alternative to user/pass)")
 	shellCmd.Flags().StringVar(&shellDB, "db", "main", "target database")
+	shellCmd.Flags().StringVar(&shellOneLine, "command", "", "run a single query and exit (non-interactive)")
 	rootCmd.AddCommand(shellCmd)
+
+	queryCmd := &cobra.Command{
+		Use:   "query <sql>",
+		Short: "Run a single SQL query",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			shellOneLine = args[0]
+			return runShell(cmd, args)
+		},
+		SilenceUsage: true,
+	}
+	queryCmd.Flags().StringVar(&shellHost, "host", "localhost", "server host")
+	queryCmd.Flags().IntVar(&shellPort, "port", 9600, "server port")
+	queryCmd.Flags().StringVar(&shellUser, "user", "admin", "login username")
+	queryCmd.Flags().StringVar(&shellPass, "pass", "admin", "login password")
+	queryCmd.Flags().StringVar(&shellAPIKey, "api-key", "", "API key (alternative to user/pass)")
+	queryCmd.Flags().StringVar(&shellDB, "db", "main", "target database")
+	rootCmd.AddCommand(queryCmd)
 }
 
 func runShell(cmd *cobra.Command, args []string) error {
@@ -51,9 +74,15 @@ func runShell(cmd *cobra.Command, args []string) error {
 		if err := c.Login(shellUser, shellPass); err != nil {
 			return fmt.Errorf("login: %w", err)
 		}
-		fmt.Printf("Connected to SparkDB at %s:%d (user: %s)\n", shellHost, shellPort, shellUser)
 	}
 
+	// Non-interactive mode: run a single query and exit
+	if shellOneLine != "" {
+		executeQuery(c, shellOneLine)
+		return nil
+	}
+
+	fmt.Printf("Connected to SparkDB at %s:%d (user: %s, db: %s)\n", shellHost, shellPort, shellUser, shellDB)
 	fmt.Println("Type \\q to quit, \\? for help")
 	fmt.Println()
 
@@ -65,7 +94,7 @@ func runShell(cmd *cobra.Command, args []string) error {
 		if continuation {
 			fmt.Print("  -> ")
 		} else {
-			fmt.Print("sparkdb> ")
+			fmt.Printf("sparkdb[%s]> ", shellDB)
 		}
 
 		if !scanner.Scan() {
@@ -153,22 +182,27 @@ func handleMeta(c *client.Client, line string) bool {
 		os.Exit(0)
 	case "\\?":
 		fmt.Println(`Meta-commands:
-  \q        quit
-  \dt       list tables
-  \d <name> describe table
-  \db       list databases
-  \?        this help`)
+  \q          quit
+  \dt         list tables in current db
+  \d <name>   describe table columns
+  \use <db>   switch to a different database
+  \db         show current database
+  \list       list all databases
+  \?          this help`)
 	case "\\dt":
 		res, err := c.Query(shellDB, "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
 		if err != nil {
 			fmt.Printf("Error: %s\n", err)
 			return true
 		}
-		fmt.Println("Tables:")
+		fmt.Printf("Tables in '%s':\n", shellDB)
 		for _, row := range res.Rows {
 			if len(row) > 0 {
 				fmt.Printf("  %s\n", row[0])
 			}
+		}
+		if len(res.Rows) == 0 {
+			fmt.Println("  (none)")
 		}
 	case "\\d":
 		if len(parts) < 2 {
@@ -187,25 +221,30 @@ func handleMeta(c *client.Client, line string) bool {
 				if row[3] == "1" {
 					null = "NO"
 				}
+				pk := ""
+				if row[5] == "1" {
+					pk = " PK"
+				}
 				def := ""
 				if row[4] != nil {
 					def = fmt.Sprintf(" DEFAULT %v", row[4])
 				}
-				fmt.Printf("  %s  %s  %s%s\n", row[1], row[2], null, def)
+				fmt.Printf("  %-20s %-10s %s%s%s\n", row[1], row[2], null, def, pk)
 			}
 		}
-	case "\\db":
-		res, err := c.Query(shellDB, "SELECT name FROM sqlite_master WHERE type='database' UNION SELECT 'main'")
-		if err != nil {
-			fmt.Printf("Error: %s\n", err)
+	case "\\use":
+		if len(parts) < 2 {
+			fmt.Printf("Current database: %s\n", shellDB)
 			return true
 		}
-		fmt.Println("Databases:")
-		for _, row := range res.Rows {
-			if len(row) > 0 {
-				fmt.Printf("  %s\n", row[0])
-			}
-		}
+		shellDB = parts[1]
+		fmt.Printf("Switched to database '%s'\n", shellDB)
+	case "\\db":
+		fmt.Printf("Current database: %s\n", shellDB)
+	case "\\list":
+		fmt.Println("Available databases:")
+		fmt.Println("  main  (default)")
+		fmt.Println("  (create more with: sparkdb create-db <name>)")
 	default:
 		fmt.Printf("Unknown meta-command: %s (try \\?)\n", parts[0])
 	}

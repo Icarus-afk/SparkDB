@@ -10,3 +10,6 @@ backups/
 sparkdb.crt
 sparkdb.key
 .vscode/
+main
+main-wal
+main-shm
