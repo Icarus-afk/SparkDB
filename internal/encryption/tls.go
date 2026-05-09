@@ -30,8 +30,8 @@ func GenerateSelfSignedCert(certPath, keyPath string) error {
 	template := x509.Certificate{
 		SerialNumber: serial,
 		Subject: pkix.Name{
-			Organization: []string{"VaultLite DB"},
-			CommonName:   "vaultlite.local",
+			Organization: []string{"SparkDB"},
+			CommonName:   "sparkdb.local",
 		},
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().Add(10 * 365 * 24 * time.Hour),
@@ -39,7 +39,7 @@ func GenerateSelfSignedCert(certPath, keyPath string) error {
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
 		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("0.0.0.0")},
-		DNSNames:              []string{"localhost", "vaultlite.local"},
+		DNSNames:              []string{"localhost", "sparkdb.local"},
 	}
 
 	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)

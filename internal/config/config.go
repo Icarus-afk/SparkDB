@@ -54,7 +54,7 @@ func Load(path string) (*Config, error) {
 	v.SetConfigName("config")
 	v.SetConfigType("json")
 	v.AddConfigPath(".")
-	v.AddConfigPath("/etc/vaultlite")
+	v.AddConfigPath("/etc/sparkdb")
 
 	if path != "" {
 		v.SetConfigFile(path)
@@ -67,8 +67,8 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("database.max_connections", 100)
 	v.SetDefault("tls.enabled", false)
 	v.SetDefault("tls.auto_cert", true)
-	v.SetDefault("tls.cert_file", "vaultlite.crt")
-	v.SetDefault("tls.key_file", "vaultlite.key")
+	v.SetDefault("tls.cert_file", "sparkdb.crt")
+	v.SetDefault("tls.key_file", "sparkdb.key")
 	v.SetDefault("encryption.enabled", false)
 	v.SetDefault("backup.dir", "backups")
 	v.SetDefault("backup.schedule", "")

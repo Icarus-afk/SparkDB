@@ -18,14 +18,14 @@ func main() {
 	var cfgPath string
 
 	rootCmd := &cobra.Command{
-		Use:   "vaultlite",
-		Short: "VaultLite DB - lightweight SQLite-powered database server",
+		Use:   "sparkdb",
+		Short: "SparkDB - lightweight SQLite-powered database server",
 	}
 	rootCmd.PersistentFlags().StringVarP(&cfgPath, "config", "c", "", "path to config file")
 
 	startCmd := &cobra.Command{
 		Use:   "start",
-		Short: "Start the VaultLite database server",
+		Short: "Start the SparkDB database server",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load(cfgPath)
 			if err != nil {
@@ -88,7 +88,7 @@ func main() {
 				return fmt.Errorf("load config: %w", err)
 			}
 
-			systemDB, err := database.NewSystemDB(cfg.Database.DataDir + "/vaultlite_system.db")
+			systemDB, err := database.NewSystemDB(cfg.Database.DataDir + "/sparkdb_system.db")
 			if err != nil {
 				return fmt.Errorf("open system database: %w", err)
 			}
@@ -118,7 +118,7 @@ func main() {
 				return fmt.Errorf("generate key: %w", err)
 			}
 			fmt.Printf("Encryption key: %x\n", key)
-			fmt.Println("Store this key securely! Set it as VAULTLITE_ENCRYPTION_KEY or in config encryption.key")
+			fmt.Println("Store this key securely! Set it as SPARKDB_ENCRYPTION_KEY or in config encryption.key")
 			return nil
 		},
 	}
@@ -138,8 +138,8 @@ func main() {
 			return nil
 		},
 	}
-	genCertCmd.Flags().String("cert", "vaultlite.crt", "certificate file path")
-	genCertCmd.Flags().String("key", "vaultlite.key", "key file path")
+	genCertCmd.Flags().String("cert", "sparkdb.crt", "certificate file path")
+	genCertCmd.Flags().String("key", "sparkdb.key", "key file path")
 	rootCmd.AddCommand(genCertCmd)
 
 	encryptCmd := &cobra.Command{
@@ -149,10 +149,10 @@ func main() {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keyHex, _ := cmd.Flags().GetString("key")
 			if keyHex == "" {
-				keyHex = os.Getenv("VAULTLITE_ENCRYPTION_KEY")
+				keyHex = os.Getenv("SPARKDB_ENCRYPTION_KEY")
 			}
 			if keyHex == "" {
-				return fmt.Errorf("encryption key required (--key or VAULTLITE_ENCRYPTION_KEY)")
+				return fmt.Errorf("encryption key required (--key or SPARKDB_ENCRYPTION_KEY)")
 			}
 
 			ciph, err := encryption.NewCipherFromHex(keyHex)
@@ -177,10 +177,10 @@ func main() {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keyHex, _ := cmd.Flags().GetString("key")
 			if keyHex == "" {
-				keyHex = os.Getenv("VAULTLITE_ENCRYPTION_KEY")
+				keyHex = os.Getenv("SPARKDB_ENCRYPTION_KEY")
 			}
 			if keyHex == "" {
-				return fmt.Errorf("encryption key required (--key or VAULTLITE_ENCRYPTION_KEY)")
+				return fmt.Errorf("encryption key required (--key or SPARKDB_ENCRYPTION_KEY)")
 			}
 
 			ciph, err := encryption.NewCipherFromHex(keyHex)
@@ -329,7 +329,7 @@ func getCipher(cfg *config.Config) (*encryption.Cipher, error) {
 		key = string(data)
 	}
 	if key == "" {
-		key = os.Getenv("VAULTLITE_ENCRYPTION_KEY")
+		key = os.Getenv("SPARKDB_ENCRYPTION_KEY")
 	}
 	if key == "" {
 		return nil, fmt.Errorf("no encryption key found")

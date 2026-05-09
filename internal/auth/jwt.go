@@ -21,7 +21,7 @@ type JWTManager struct {
 
 func NewJWTManager(secret string, duration time.Duration) *JWTManager {
 	if secret == "" {
-		secret = "vaultlite-dev-secret"
+		secret = "sparkdb-dev-secret"
 	}
 	if duration == 0 {
 		duration = 24 * time.Hour
@@ -40,7 +40,7 @@ func (m *JWTManager) Generate(userID int64, username, role string) (string, erro
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(m.duration)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			Issuer:    "vaultlite",
+			Issuer:    "sparkdb",
 		},
 	}
 

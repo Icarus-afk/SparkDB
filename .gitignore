@@ -1,4 +1,5 @@
-/vaultlite
+/sparkdb
+vaultlite
 main-shm
 *.db
 *.db-journal
@@ -6,6 +7,6 @@ main-shm
 *.db-shm
 *.dec
 backups/
-vaultlite.crt
-vaultlite.key
+sparkdb.crt
+sparkdb.key
 .vscode/

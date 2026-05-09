@@ -1,4 +1,4 @@
-# NanoDB / VaultLite — Test Results
+# NanoDB / SparkDB — Test Results
 
 **Date:** 2026-05-09  
 **Go version:** 1.25.0  
@@ -13,7 +13,7 @@
 | `go build ./...` | **PASS** |
 | `go vet ./...` | **PASS** |
 | `go test ./...` | **PASS** (no test files found) |
-| Binary compilation | **PASS** (`cmd/vaultlite` compiles) |
+| Binary compilation | **PASS** (`cmd/sparkdb` compiles) |
 
 ---
 
@@ -21,7 +21,7 @@
 
 | Package | Build | Vet |
 |---------|-------|-----|
-| `nanodb/cmd/vaultlite` | PASS | PASS |
+| `nanodb/cmd/sparkdb` | PASS | PASS |
 | `nanodb/internal/auth` | PASS | PASS |
 | `nanodb/internal/backup` | PASS | PASS |
 | `nanodb/internal/config` | PASS | PASS |
@@ -70,7 +70,7 @@ No test files (`*_test.go`) exist in any package. All 11 packages report `[no te
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| `cmd/vaultlite/main.go` | 338 | CLI entry point (start, create-db, create-user, gen-key, gen-cert, encrypt, decryp, backup, restore, list-backups) |
+| `cmd/sparkdb/main.go` | 338 | CLI entry point (start, create-db, create-user, gen-key, gen-cert, encrypt, decryp, backup, restore, list-backups) |
 | `internal/auth/auth.go` | 250 | Authentication (login, JWT, API key, session validation) |
 | `internal/auth/apikey.go` | 37 | API key generation/hashing |
 | `internal/auth/jwt.go` | 72 | JWT token generation/validation |

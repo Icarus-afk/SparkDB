@@ -42,10 +42,10 @@ func New(cfg *config.Config) (*Server, error) {
 			key = string(keyData)
 		}
 		if key == "" {
-			key = os.Getenv("VAULTLITE_ENCRYPTION_KEY")
+			key = os.Getenv("SPARKDB_ENCRYPTION_KEY")
 		}
 		if key == "" {
-			return nil, fmt.Errorf("encryption enabled but no key provided (set key, key_file, or VAULTLITE_ENCRYPTION_KEY)")
+			return nil, fmt.Errorf("encryption enabled but no key provided (set key, key_file, or SPARKDB_ENCRYPTION_KEY)")
 		}
 
 		var err error
@@ -62,7 +62,7 @@ func New(cfg *config.Config) (*Server, error) {
 		dbManager = database.NewManager(cfg.Database.DataDir, cfg.Database.WALMode, cfg.Database.MaxConns)
 	}
 
-	systemDBPath := cfg.Database.DataDir + "/vaultlite_system.db"
+	systemDBPath := cfg.Database.DataDir + "/sparkdb_system.db"
 	systemDB, err := database.NewSystemDB(systemDBPath)
 	if err != nil {
 		return nil, fmt.Errorf("init system database: %w", err)
@@ -163,9 +163,9 @@ func (s *Server) Start() error {
 	errCh := make(chan error, 1)
 
 	if s.tlsEnabled {
-		log.Printf("VaultLite DB starting on https://%s", s.httpServer.Addr)
+		log.Printf("SparkDB starting on https://%s", s.httpServer.Addr)
 	} else {
-		log.Printf("VaultLite DB starting on http://%s", s.httpServer.Addr)
+		log.Printf("SparkDB starting on http://%s", s.httpServer.Addr)
 	}
 	log.Println("default admin credentials: admin / admin")
 
