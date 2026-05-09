@@ -101,11 +101,13 @@ func New(cfg *config.Config) (*Server, error) {
 	mux.Handle("POST /backup", requireAuth(http.HandlerFunc(handler.HandleBackup)))
 	mux.Handle("POST /restore", requireAuth(http.HandlerFunc(handler.HandleRestore)))
 	mux.Handle("GET /backups", requireAuth(http.HandlerFunc(handler.HandleListBackups)))
+	mux.Handle("DELETE /backups/{name}", requireAuth(http.HandlerFunc(handler.HandleDeleteBackup)))
 
 	mux.Handle("POST /auth/login", optionalAuth(http.HandlerFunc(handler.HandleLogin)))
 	mux.Handle("POST /auth/api-keys", requireAuth(http.HandlerFunc(handler.HandleCreateAPIKey)))
 	mux.Handle("GET /auth/api-keys", requireAuth(http.HandlerFunc(handler.HandleListAPIKeys)))
 	mux.Handle("DELETE /auth/api-keys/{id}", requireAuth(http.HandlerFunc(handler.HandleDeleteAPIKey)))
+	mux.Handle("POST /auth/api-keys/{id}/reveal", requireAuth(http.HandlerFunc(handler.HandleRevealAPIKey)))
 
 	mux.Handle("POST /admin/users", requireAuth(http.HandlerFunc(handler.HandleCreateUser)))
 	mux.Handle("GET /admin/users", requireAuth(http.HandlerFunc(handler.HandleListUsers)))
@@ -119,14 +121,15 @@ func New(cfg *config.Config) (*Server, error) {
 	})))
 	mux.Handle("GET /databases", requireAuth(http.HandlerFunc(handler.HandleListDatabases)))
 	mux.Handle("GET /stats", requireAuth(http.HandlerFunc(handler.HandleStats)))
-	mux.Handle("GET /metrics", http.HandlerFunc(handler.HandlePrometheus))
+	mux.Handle("GET /metrics", optionalAuth(http.HandlerFunc(handler.HandlePrometheus)))
 
 	mux.Handle("GET /", web.NewHandler())
 
 	var h http.Handler = mux
 	h = loggingMiddleware(h)
 	h = recoveryMiddleware(h)
-	h = corsMiddleware(h)
+	h = bodyLimitMiddleware(1 << 20)(h)
+	h = corsMiddleware(cfg.Server.AllowedOrigins)(h)
 	h = rateLimitMiddleware(rateLimiter)(h)
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
@@ -195,7 +198,6 @@ func (s *Server) Start() error {
 	} else {
 		log.Printf("SparkDB starting on http://%s", s.httpServer.Addr)
 	}
-	log.Println("default admin credentials: admin / admin")
 
 	if s.cfg.Backup.Schedule != "" {
 		go s.scheduledBackupLoop()
