@@ -42,6 +42,12 @@ func NewHandler() http.Handler {
 			ct = "text/css; charset=utf-8"
 		case strings.HasSuffix(p, ".js"):
 			ct = "application/javascript; charset=utf-8"
+		case strings.HasSuffix(p, ".png"):
+			ct = "image/png"
+		case strings.HasSuffix(p, ".ico"):
+			ct = "image/x-icon"
+		case strings.HasSuffix(p, ".svg"):
+			ct = "image/svg+xml"
 		}
 		w.Header().Set("Content-Type", ct)
 		w.Write(data)
