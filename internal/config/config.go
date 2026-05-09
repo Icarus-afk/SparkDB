@@ -1,6 +1,8 @@
 package config
 
 import (
+	"strings"
+
 	"github.com/spf13/viper"
 )
 
@@ -73,6 +75,10 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("backup.dir", "backups")
 	v.SetDefault("backup.schedule", "")
 	v.SetDefault("backup.keep_count", 10)
+
+	v.SetEnvPrefix("SPARKDB")
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
 
 	if err := v.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {

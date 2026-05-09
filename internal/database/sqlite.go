@@ -132,6 +132,10 @@ func (m *Manager) CloseAll() error {
 	return lastErr
 }
 
+func (m *Manager) DataDir() string {
+	return m.dataDir
+}
+
 func (m *Manager) List() []string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

@@ -1,14 +1,13 @@
-/sparkdb
-vaultlite
+.git/
+.gitignore
+.vscode/
 *.db
 *.db-journal
 *.db-wal
 *.db-shm
-*.dec
 backups/
 sparkdb.crt
 sparkdb.key
-.vscode/
 main
 main-wal
 main-shm
@@ -21,3 +20,8 @@ shop-shm
 analytics
 analytics-wal
 analytics-shm
+sparkdb
+seed.py
+seed.sh
+TEST_RESULTS.md
+README.md

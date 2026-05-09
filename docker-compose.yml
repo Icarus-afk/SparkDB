@@ -1,0 +1,22 @@
+version: "3.9"
+
+services:
+  sparkdb:
+    build: .
+    ports:
+      - "9600:9600"
+    volumes:
+      - sparkdb-data:/data
+      - sparkdb-backups:/backups
+    environment:
+      - SPARKDB_DATABASE_DATA_DIR=/data
+      - SPARKDB_DATABASE_WAL_MODE=true
+      - SPARKDB_AUTH_ENABLED=true
+      - SPARKDB_AUTH_JWT_SECRET=change-this-to-a-random-secret-in-production
+      - SPARKDB_BACKUP_DIR=/backups
+      - SPARKDB_BACKUP_KEEP_COUNT=10
+    restart: unless-stopped
+
+volumes:
+  sparkdb-data:
+  sparkdb-backups:

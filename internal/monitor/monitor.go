@@ -9,6 +9,8 @@ import (
 
 type DBStatusProvider interface {
 	List() []string
+	ListAll() []string
+	DataDir() string
 }
 
 type Monitor struct {
@@ -37,7 +39,7 @@ type Stats struct {
 
 type DatabaseStat struct {
 	Name string `json:"name"`
-	Size int64  `json:"size_bytes"`
+	Size int64  `json:"size"`
 }
 
 func New(dbProvider DBStatusProvider) *Monitor {
@@ -94,13 +96,20 @@ func (m *Monitor) Stats() Stats {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 
-	dbNames := m.dbProvider.List()
+	dbNames := m.dbProvider.ListAll()
+	dataDir := m.dbProvider.DataDir()
 	dbStats := make([]DatabaseStat, 0, len(dbNames))
 	for _, name := range dbNames {
-		path := "." + "/" + name
+		path := dataDir + "/" + name
 		info, err := os.Stat(path)
 		if err == nil {
-			dbStats = append(dbStats, DatabaseStat{Name: name, Size: info.Size()})
+			size := info.Size()
+			for _, ext := range []string{"-wal", "-shm", "-journal"} {
+				if wi, werr := os.Stat(path + ext); werr == nil {
+					size += wi.Size()
+				}
+			}
+			dbStats = append(dbStats, DatabaseStat{Name: name, Size: size})
 		}
 	}
 
