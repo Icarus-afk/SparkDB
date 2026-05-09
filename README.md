@@ -18,6 +18,7 @@ A lightweight, secure SQLite-powered database server with encryption, authentica
 - **Prometheus metrics** -- `/metrics` endpoint for monitoring and alerting
 - **Transaction support** -- atomic multi-statement execution
 - **Web console** -- built-in management UI for databases, users, API keys, backups, and audit logs
+- **Primary/replica replication** -- query-log-based replication between SparkDB instances
 
 ## Quick Start
 
@@ -117,6 +118,12 @@ Create `config.json` in the working directory or `/etc/sparkdb/config.json`:
     "dir": "/backups",
     "schedule": "",
     "keep_count": 10
+  },
+  "replication": {
+    "role": "standalone",
+    "primary_url": "",
+    "api_key": "",
+    "poll_interval": 5
   }
 }
 ```
@@ -137,6 +144,10 @@ All config values can be set via environment variables with the `SPARKDB_` prefi
 | `SPARKDB_DATABASE_DATA_DIR` | Database storage directory |
 | `SPARKDB_BACKUP_DIR` | Backup storage directory |
 | `SPARKDB_TLS_ENABLED` | Enable TLS (true/false) |
+| `SPARKDB_REPLICATION_ROLE` | Replication role: primary, replica, or standalone (default) |
+| `SPARKDB_REPLICATION_PRIMARY_URL` | Primary URL (required for replica role) |
+| `SPARKDB_REPLICATION_API_KEY` | API key for replica authentication to primary |
+| `SPARKDB_REPLICATION_POLL_INTERVAL` | Replica poll interval in seconds (default: 5) |
 
 ### Docker Secrets
 
@@ -377,6 +388,42 @@ sparkdb export users --format json --output users.json
 sparkdb export users --db appdb --format csv --output users.csv
 ```
 
+## Replication
+
+SparkDB supports primary/replica replication for high availability and read scaling. Every write query executed on the primary is logged to a `replication_log` table. Replicas poll the primary and apply changes locally.
+
+### Setup
+
+**Primary** (default configuration):
+```bash
+SPARKDB_REPLICATION_ROLE=primary ./sparkdb start
+```
+
+**Replica**:
+```bash
+SPARKDB_REPLICATION_ROLE=replica \
+  SPARKDB_REPLICATION_PRIMARY_URL=http://primary:9600 \
+  SPARKDB_REPLICATION_API_KEY=vl_... \
+  ./sparkdb start
+```
+
+The replica requires an API key with admin privileges on the primary. The replica polls the primary every 5 seconds (configurable via `replication.poll_interval`) for new log entries and applies them in order.
+
+### How It Works
+
+1. The primary logs all write queries (INSERT, UPDATE, DELETE, CREATE, ALTER, DROP) to `replication_log` with an auto-incrementing ID
+2. The replica calls `GET /replication/log?since=<last_id>` to fetch new entries
+3. Entries are applied sequentially to the replica's databases
+4. The replica tracks progress in a `replication_state` table
+5. SELECT and PRAGMA queries are not replicated
+
+### Limitations
+
+- Replication is asynchronous (not real-time)
+- All databases on the primary are replicated to the replica
+- The replica should be treated as read-only for user access
+- DDL changes (CREATE/ALTER/DROP) are replicated
+
 ## Web Console
 
 SparkDB includes a built-in web management console served at `http://localhost:9600/`. The console provides:
@@ -423,6 +470,7 @@ internal/
   monitor/             Runtime monitoring and Prometheus metrics
   query/               Query validation, type detection, rate limiting
   rbac/                Role-based access control
+  replication/         Query-log-based primary/replica replication
   server/              HTTP server, middleware, route handlers
   web/                 Embedded web console (static assets)
 pkg/api/               Shared API types
