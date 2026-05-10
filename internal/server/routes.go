@@ -83,7 +83,7 @@ func (h *Handler) HandleQuery(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	res, err := h.executor.Execute(dbName, req.Query)
+	res, err := h.executor.Execute(dbName, req.Query, req.Params...)
 	if err != nil {
 		h.logAudit(user, r, req.Query, "query_error", "failed")
 		writeJSON(w, http.StatusInternalServerError, api.ErrorResponse{Error: err.Error(), Code: 500})

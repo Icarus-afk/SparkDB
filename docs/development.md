@@ -55,6 +55,28 @@ make dev                          # Build and start dev server
 make fresh                        # Clean DBs and start fresh
 ```
 
+## Python SDK
+
+A full ORM lives in `sdk/python/`:
+
+```python
+from sparkdb import SparkDB, Model, fields
+
+db = SparkDB(url="http://localhost:9600", username="admin", password="admin")
+
+class User(Model):
+    name = fields.String(max_length=100)
+    email = fields.String(unique=True)
+    class Meta:
+        database = db
+
+User.create_table()
+User.create(name="Alice", email="alice@example.com")
+users = User.where(name="Alice").all()
+```
+
+See `sdk/python/README.md` for full docs.
+
 ## Tech Stack
 
 - **Go 1.25+** — no CGO required

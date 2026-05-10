@@ -59,8 +59,8 @@ func (c *Client) SetAPIKey(key string) {
 	c.apiKey = key
 }
 
-func (c *Client) Query(database, query string) (*api.QueryResponse, error) {
-	req := api.QueryRequest{Query: query, Database: database}
+func (c *Client) Query(database, query string, params ...interface{}) (*api.QueryResponse, error) {
+	req := api.QueryRequest{Query: query, Database: database, Params: params}
 	body, _ := json.Marshal(req)
 
 	httpReq, _ := http.NewRequest("POST", c.baseURL+"/query", bytes.NewReader(body))

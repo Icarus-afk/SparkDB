@@ -1,8 +1,9 @@
 package api
 
 type QueryRequest struct {
-	Query    string `json:"query"`
-	Database string `json:"database"`
+	Query    string        `json:"query"`
+	Database string        `json:"database"`
+	Params   []interface{} `json:"params,omitempty"`
 }
 
 type QueryResponse struct {

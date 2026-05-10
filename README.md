@@ -36,6 +36,7 @@ On first run, SparkDB creates a default `admin` user with password `admin`. **Ch
 - **Prometheus metrics** — `/metrics` endpoint
 - **Web console** — built-in management UI
 - **Primary/replica replication** — query-log-based
+- **Python ORM** — models, query builder, migrations (sdk/python)
 
 ## Documentation
 
@@ -46,6 +47,7 @@ On first run, SparkDB creates a default `admin` user with password `admin`. **Ch
 | [Authentication](docs/authentication.md) | JWT, sessions, API keys, user management |
 | [CLI Reference](docs/cli.md) | All commands, flags, shell meta-commands |
 | [API Reference](docs/api.md) | REST endpoints, request/response formats |
+| [Python SDK](sdk/python/README.md) | Full ORM for Python (models, query builder, migrations) |
 | [Replication](docs/replication.md) | Primary/replica setup, architecture |
 | [Security](docs/security.md) | Encryption, rate limiting, query validation, CORS |
 | [Deployment](docs/deployment.md) | Production checklist, Docker, systemd, reverse proxy |

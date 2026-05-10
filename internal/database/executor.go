@@ -27,7 +27,7 @@ func (e *Executor) ListDatabases() []string {
 	return e.manager.ListAll()
 }
 
-func (e *Executor) Execute(dbName, query string) (*api.QueryResponse, error) {
+func (e *Executor) Execute(dbName, query string, params ...interface{}) (*api.QueryResponse, error) {
 	start := time.Now()
 
 	db, err := e.manager.Open(dbName)
@@ -45,9 +45,9 @@ func (e *Executor) Execute(dbName, query string) (*api.QueryResponse, error) {
 	if strings.HasPrefix(upper, "SELECT") ||
 		strings.HasPrefix(upper, "PRAGMA") ||
 		strings.HasPrefix(upper, "EXPLAIN") {
-		res, err = e.executeQuery(db, q, start)
+		res, err = e.executeQuery(db, q, start, params...)
 	} else {
-		res, err = e.executeExec(db, q, start)
+		res, err = e.executeExec(db, q, start, params...)
 	}
 
 	if e.mon != nil {
@@ -101,8 +101,14 @@ func (e *Executor) ExecuteTransaction(dbName string, queries []string) (*api.Tra
 	return &api.TransactionResponse{Results: results}, nil
 }
 
-func (e *Executor) executeQuery(db *sql.DB, query string, start time.Time) (*api.QueryResponse, error) {
-	rows, err := db.Query(query)
+func (e *Executor) executeQuery(db *sql.DB, query string, start time.Time, params ...interface{}) (*api.QueryResponse, error) {
+	var rows *sql.Rows
+	var err error
+	if len(params) > 0 {
+		rows, err = db.Query(query, params...)
+	} else {
+		rows, err = db.Query(query)
+	}
 	if err != nil {
 		return &api.QueryResponse{Error: err.Error()}, nil
 	}
@@ -134,8 +140,14 @@ func (e *Executor) executeQuery(db *sql.DB, query string, start time.Time) (*api
 	}, nil
 }
 
-func (e *Executor) executeExec(db *sql.DB, query string, start time.Time) (*api.QueryResponse, error) {
-	result, err := db.Exec(query)
+func (e *Executor) executeExec(db *sql.DB, query string, start time.Time, params ...interface{}) (*api.QueryResponse, error) {
+	var result sql.Result
+	var err error
+	if len(params) > 0 {
+		result, err = db.Exec(query, params...)
+	} else {
+		result, err = db.Exec(query)
+	}
 	if err != nil {
 		return &api.QueryResponse{Error: err.Error()}, nil
 	}
