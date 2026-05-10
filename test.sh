@@ -163,9 +163,11 @@ echo "$DELETE_RESULT" | python3 -c "import sys,json; assert 'message' in json.lo
 echo ""
 echo "=== Stress tests ==="
 
-# Create a dedicated stress table
+# Create stress table (IF NOT EXISTS) and clear any leftover rows
 curl -s -X POST "$BASE/query" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"query":"CREATE TABLE IF NOT EXISTS stress_test (id INTEGER PRIMARY KEY, val TEXT)"}' > /dev/null
+curl -s -X POST "$BASE/query" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d "{\"query\":\"DELETE FROM stress_test\"}" > /dev/null
 
 # Bulk INSERT 1000 rows via temp file (avoids pipe issues with large payloads)
 echo "  └─ bulk insert 1000 rows..."
