@@ -22,40 +22,27 @@ type Manager struct {
 	walMode  bool
 	maxConns int
 	cipher   *encryption.Cipher
+	decDir   string
 }
 
 func NewManager(dataDir string, walMode bool, maxConns int) *Manager {
-	m := &Manager{
+	return &Manager{
 		dbs:      make(map[string]*sql.DB),
 		dataDir:  dataDir,
 		walMode:  walMode,
 		maxConns: maxConns,
 	}
-	m.cleanupStaleDecFiles()
-	return m
 }
 
 func NewEncryptedManager(dataDir string, walMode bool, maxConns int, c *encryption.Cipher) *Manager {
-	m := &Manager{
+	decDir, _ := os.MkdirTemp("", "sparkdb-dec-*")
+	return &Manager{
 		dbs:      make(map[string]*sql.DB),
 		dataDir:  dataDir,
 		walMode:  false,
 		maxConns: maxConns,
 		cipher:   c,
-	}
-	m.cleanupStaleDecFiles()
-	return m
-}
-
-func (m *Manager) cleanupStaleDecFiles() {
-	entries, err := os.ReadDir(m.dataDir)
-	if err != nil {
-		return
-	}
-	for _, e := range entries {
-		if strings.HasSuffix(e.Name(), ".dec") {
-			os.Remove(filepath.Join(m.dataDir, e.Name()))
-		}
+		decDir:   decDir,
 	}
 }
 
@@ -72,10 +59,11 @@ func (m *Manager) Open(name string) (*sql.DB, error) {
 
 	if m.cipher != nil {
 		if m.isEncrypted(path) {
-			decPath := path + ".dec"
+			decPath := filepath.Join(m.decDir, name)
 			if err := m.cipher.DecryptCopy(path, decPath); err != nil {
 				return nil, fmt.Errorf("decrypt database %s: %w", name, err)
 			}
+			defer os.Remove(decPath)
 			actualPath = decPath
 		}
 	}
@@ -130,6 +118,7 @@ func (m *Manager) Close(name string) error {
 	delete(m.dbs, name)
 
 	m.reencrypt(name)
+	m.cleanupDecrypted(name)
 	return nil
 }
 
@@ -144,8 +133,20 @@ func (m *Manager) CloseAll() error {
 		}
 		delete(m.dbs, name)
 		m.reencrypt(name)
+		m.cleanupDecrypted(name)
+	}
+
+	if m.decDir != "" {
+		os.RemoveAll(m.decDir)
 	}
 	return lastErr
+}
+
+func (m *Manager) cleanupDecrypted(name string) {
+	if m.decDir == "" {
+		return
+	}
+	os.Remove(filepath.Join(m.decDir, name))
 }
 
 func (m *Manager) DataDir() string {
@@ -210,9 +211,6 @@ func (m *Manager) ListAll() []string {
 			if strings.HasSuffix(name, "-wal") || strings.HasSuffix(name, "-shm") || strings.HasSuffix(name, "-journal") {
 				continue
 			}
-			if strings.HasSuffix(name, ".dec") {
-				continue
-			}
 
 			ext := filepath.Ext(name)
 			if ext != "" && ext != ".db" && ext != ".sqlite" && ext != ".sqlite3" {
@@ -246,19 +244,28 @@ func (m *Manager) isEncrypted(path string) bool {
 	return info.Size() > 0
 }
 
+func (m *Manager) ActivePath(name string) string {
+	if m.cipher != nil && m.decDir != "" {
+		decPath := filepath.Join(m.decDir, name)
+		if _, err := os.Stat(decPath); err == nil {
+			return decPath
+		}
+	}
+	return m.resolvePath(name)
+}
+
 func (m *Manager) reencrypt(name string) {
 	if m.cipher == nil {
 		return
 	}
 
 	origPath := m.resolvePath(name)
-	decPath := origPath + ".dec"
+	decPath := filepath.Join(m.decDir, name)
 
 	if _, err := os.Stat(decPath); err == nil {
 		if err := m.cipher.EncryptCopy(decPath, origPath); err != nil {
 			fmt.Fprintf(os.Stderr, "error encrypting database %s: %v\n", name, err)
 		}
-		os.Remove(decPath)
 		return
 	}
 

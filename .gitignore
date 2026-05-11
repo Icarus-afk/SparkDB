@@ -21,3 +21,6 @@ shop-shm
 analytics
 analytics-wal
 analytics-shm
+
+# Internal docs (architecture, plans, ADRs)
+docs/internal/

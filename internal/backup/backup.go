@@ -55,14 +55,18 @@ func (bm *Manager) CreateBackup(dbName string) (*BackupInfo, error) {
 
 	srcPath := bm.dataDir + "/" + dbName
 	if bm.cipher != nil {
-		decPath := srcPath + ".dec"
-		if _, err := os.Stat(decPath); err == nil {
-			srcPath = decPath
-		}
+		srcPath = bm.dbManager.ActivePath(dbName)
 	}
 
-	if err := copyFile(srcPath, backupPath); err != nil {
+	tmpPath := backupPath + ".tmp"
+	if err := copyFile(srcPath, tmpPath); err != nil {
+		os.Remove(tmpPath)
 		return nil, fmt.Errorf("copy backup: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, backupPath); err != nil {
+		os.Remove(tmpPath)
+		return nil, fmt.Errorf("atomic rename: %w", err)
 	}
 
 	info, err := os.Stat(backupPath)

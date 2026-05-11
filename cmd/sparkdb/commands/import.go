@@ -1,4 +1,4 @@
-package main
+package commands
 
 import (
 	"encoding/csv"
@@ -126,14 +126,12 @@ func importCSV(c *client.Client, path string) error {
 		batch := data[b:end]
 
 		var placeholders []string
-		var values []string
 		for _, row := range batch {
 			phs := make([]string, len(headers))
 			for i, val := range row {
 				phs[i] = escapeValue(val, colTypes[i])
 			}
 			placeholders = append(placeholders, "("+strings.Join(phs, ",")+")")
-			_ = values
 		}
 
 		insertSQL := fmt.Sprintf("INSERT INTO %s (%s) VALUES %s",
@@ -336,4 +334,3 @@ func splitSQL(content string) []string {
 	}
 	return stmts
 }
-

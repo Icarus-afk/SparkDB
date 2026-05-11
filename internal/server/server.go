@@ -38,25 +38,10 @@ type Server struct {
 func New(cfg *config.Config) (*Server, error) {
 	var ciph *encryption.Cipher
 	if cfg.Encryption.Enabled {
-		key := cfg.Encryption.Key
-		if key == "" && cfg.Encryption.KeyFile != "" {
-			keyData, err := os.ReadFile(cfg.Encryption.KeyFile)
-			if err != nil {
-				return nil, fmt.Errorf("read encryption key file: %w", err)
-			}
-			key = string(keyData)
-		}
-		if key == "" {
-			key = os.Getenv("SPARKDB_ENCRYPTION_KEY")
-		}
-		if key == "" {
-			return nil, fmt.Errorf("encryption enabled but no key provided (set key, key_file, or SPARKDB_ENCRYPTION_KEY)")
-		}
-
 		var err error
-		ciph, err = encryption.NewCipherFromHex(key)
+		ciph, err = encryption.GetCipher(cfg.Encryption.Key, cfg.Encryption.KeyFile)
 		if err != nil {
-			return nil, fmt.Errorf("init cipher: %w", err)
+			return nil, fmt.Errorf("encryption: %w", err)
 		}
 	}
 

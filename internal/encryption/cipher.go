@@ -155,3 +155,20 @@ func (c *Cipher) EncryptReader(r io.Reader) ([]byte, error) {
 	}
 	return c.Encrypt(plaintext)
 }
+
+func GetCipher(key, keyFile string) (*Cipher, error) {
+	if key == "" && keyFile != "" {
+		data, err := os.ReadFile(keyFile)
+		if err != nil {
+			return nil, fmt.Errorf("read key file: %w", err)
+		}
+		key = string(data)
+	}
+	if key == "" {
+		key = os.Getenv("SPARKDB_ENCRYPTION_KEY")
+	}
+	if key == "" {
+		return nil, fmt.Errorf("no encryption key found")
+	}
+	return NewCipherFromHex(key)
+}

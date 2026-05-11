@@ -1,4 +1,4 @@
-package main
+package commands
 
 import (
 	"bufio"
@@ -79,7 +79,6 @@ func runShell(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Non-interactive mode: run a single query and exit
 	if shellOneLine != "" {
 		executeQuery(c, shellOneLine)
 		return nil

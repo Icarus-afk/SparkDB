@@ -1,4 +1,4 @@
-package main
+package commands
 
 import (
 	"crypto/rand"
@@ -10,42 +10,6 @@ import (
 
 	"github.com/spf13/cobra"
 )
-
-type initConfig struct {
-	Server struct {
-		Host string `json:"host"`
-		Port int    `json:"port"`
-	} `json:"server"`
-	Database struct {
-		DataDir  string `json:"data_dir"`
-		WALMode  bool   `json:"wal_mode"`
-		MaxConns int    `json:"max_connections"`
-	} `json:"database"`
-	Auth struct {
-		JWTSecret string `json:"jwt_secret"`
-	} `json:"auth"`
-	TLS struct {
-		Enabled  bool   `json:"enabled"`
-		AutoCert bool   `json:"auto_cert"`
-		CertFile string `json:"cert_file"`
-		KeyFile  string `json:"key_file"`
-	} `json:"tls"`
-	Encryption struct {
-		Enabled bool   `json:"enabled"`
-		Key     string `json:"key,omitempty"`
-	} `json:"encryption"`
-	Backup struct {
-		Dir       string `json:"dir"`
-		Schedule  string `json:"schedule"`
-		KeepCount int    `json:"keep_count"`
-	} `json:"backup"`
-	Replication struct {
-		Role         string `json:"role"`
-		PrimaryURL   string `json:"primary_url,omitempty"`
-		APIKey       string `json:"api_key,omitempty"`
-		PollInterval int    `json:"poll_interval"`
-	} `json:"replication"`
-}
 
 func init() {
 	var initDir string
@@ -180,4 +144,40 @@ Optionally generates TLS certificates and encryption keys.`,
 	initCmd.Flags().StringVar(&initDataDir, "data-dir", "", "database data directory (default: <dir>/data)")
 	initCmd.Flags().StringVar(&initBackupDir, "backup-dir", "", "backup directory (default: <dir>/backups)")
 	rootCmd.AddCommand(initCmd)
+}
+
+type initConfig struct {
+	Server struct {
+		Host string `json:"host"`
+		Port int    `json:"port"`
+	} `json:"server"`
+	Database struct {
+		DataDir  string `json:"data_dir"`
+		WALMode  bool   `json:"wal_mode"`
+		MaxConns int    `json:"max_connections"`
+	} `json:"database"`
+	Auth struct {
+		JWTSecret string `json:"jwt_secret"`
+	} `json:"auth"`
+	TLS struct {
+		Enabled  bool   `json:"enabled"`
+		AutoCert bool   `json:"auto_cert"`
+		CertFile string `json:"cert_file"`
+		KeyFile  string `json:"key_file"`
+	} `json:"tls"`
+	Encryption struct {
+		Enabled bool   `json:"enabled"`
+		Key     string `json:"key,omitempty"`
+	} `json:"encryption"`
+	Backup struct {
+		Dir       string `json:"dir"`
+		Schedule  string `json:"schedule"`
+		KeepCount int    `json:"keep_count"`
+	} `json:"backup"`
+	Replication struct {
+		Role         string `json:"role"`
+		PrimaryURL   string `json:"primary_url,omitempty"`
+		APIKey       string `json:"api_key,omitempty"`
+		PollInterval int    `json:"poll_interval"`
+	} `json:"replication"`
 }

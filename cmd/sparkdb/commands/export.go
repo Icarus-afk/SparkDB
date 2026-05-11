@@ -1,4 +1,4 @@
-package main
+package commands
 
 import (
 	"encoding/csv"
@@ -129,5 +129,3 @@ func exportJSON(w *os.File, columns []string, rows [][]interface{}) error {
 	}
 	return nil
 }
-
-

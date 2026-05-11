@@ -94,7 +94,7 @@ type DangerPattern struct {
 var dangerPatterns = []DangerPattern{
 	{`DROP DATABASE`, DangerBlock, "dropping databases is not allowed"},
 	{`DROP TABLE`, DangerBlock, "dropping tables requires admin role"},
-	{`DELETE FROM sqlite_master`, DangerBlock, "modifying system tables is not allowed"},
+	{`DELETE FROM SQLITE_MASTER`, DangerBlock, "modifying system tables is not allowed"},
 	{`DROP INDEX`, DangerWarning, "dropping indexes requires caution"},
 	{`DROP VIEW`, DangerWarning, "dropping views requires caution"},
 	{`DROP TRIGGER`, DangerWarning, "dropping triggers requires caution"},
