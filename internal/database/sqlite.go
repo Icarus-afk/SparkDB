@@ -73,8 +73,8 @@ func (m *Manager) Open(name string) (*sql.DB, error) {
 		return nil, fmt.Errorf("open database %s: %w", name, err)
 	}
 
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
+	db.SetMaxOpenConns(m.maxConns)
+	db.SetMaxIdleConns(m.maxConns)
 	db.SetConnMaxLifetime(0)
 
 	if m.walMode {

@@ -88,79 +88,111 @@ func (s *SystemDB) DB() *sql.DB {
 }
 
 func migrate(db *sql.DB) error {
-	schema := `
-	CREATE TABLE IF NOT EXISTS users (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		username TEXT UNIQUE NOT NULL,
-		password_hash TEXT NOT NULL,
-		role TEXT NOT NULL DEFAULT 'developer',
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		locked_until DATETIME
-	);
-
-	CREATE TABLE IF NOT EXISTS api_keys (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		user_id INTEGER NOT NULL,
-		key_hash TEXT NOT NULL,
-		name TEXT NOT NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		expires_at DATETIME,
-		FOREIGN KEY (user_id) REFERENCES users(id)
-	);
-
-	CREATE TABLE IF NOT EXISTS sessions (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		user_id INTEGER NOT NULL,
-		token TEXT UNIQUE NOT NULL,
-		expires_at DATETIME NOT NULL,
-		FOREIGN KEY (user_id) REFERENCES users(id)
-	);
-
-	CREATE TABLE IF NOT EXISTS audit_logs (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		user_id INTEGER,
-		username TEXT,
-		ip_address TEXT,
-		query TEXT,
-		endpoint TEXT,
-		status TEXT,
-		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-
-	CREATE TABLE IF NOT EXISTS replication_log (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		database_name TEXT NOT NULL,
-		query TEXT NOT NULL,
-		executed_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-
-	CREATE TABLE IF NOT EXISTS replication_state (
-		id INTEGER PRIMARY KEY CHECK (id = 1),
-		role TEXT NOT NULL DEFAULT 'standalone',
-		primary_url TEXT DEFAULT '',
-		last_applied_id INTEGER DEFAULT 0,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-
-	CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
-	CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_logs(timestamp);
-	`
-	if _, err := db.Exec(schema); err != nil {
-		return err
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
+		version INTEGER PRIMARY KEY,
+		description TEXT NOT NULL,
+		applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`); err != nil {
+		return fmt.Errorf("create migrations table: %w", err)
 	}
 
-	_, err := db.Exec("ALTER TABLE api_keys ADD COLUMN prefix TEXT DEFAULT ''")
-	if err != nil && !isDuplicateColumn(err) {
-		return err
+	type migration struct {
+		version     int
+		description string
+		sql         string
 	}
-	_, err = db.Exec("ALTER TABLE api_keys ADD COLUMN encrypted_key TEXT DEFAULT ''")
-	if err != nil && !isDuplicateColumn(err) {
-		return err
+
+	migrations := []migration{
+		{
+			version: 1, description: "initial schema",
+			sql: `
+				CREATE TABLE IF NOT EXISTS users (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					username TEXT UNIQUE NOT NULL,
+					password_hash TEXT NOT NULL,
+					role TEXT NOT NULL DEFAULT 'developer',
+					created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+					locked_until DATETIME
+				);
+				CREATE TABLE IF NOT EXISTS api_keys (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					user_id INTEGER NOT NULL,
+					key_hash TEXT NOT NULL,
+					name TEXT NOT NULL,
+					created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+					expires_at DATETIME,
+					FOREIGN KEY (user_id) REFERENCES users(id)
+				);
+				CREATE TABLE IF NOT EXISTS sessions (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					user_id INTEGER NOT NULL,
+					token TEXT UNIQUE NOT NULL,
+					expires_at DATETIME NOT NULL,
+					FOREIGN KEY (user_id) REFERENCES users(id)
+				);
+				CREATE TABLE IF NOT EXISTS audit_logs (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					user_id INTEGER,
+					username TEXT,
+					ip_address TEXT,
+					query TEXT,
+					endpoint TEXT,
+					status TEXT,
+					timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+				);
+				CREATE TABLE IF NOT EXISTS replication_log (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					database_name TEXT NOT NULL,
+					query TEXT NOT NULL,
+					executed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+				);
+				CREATE TABLE IF NOT EXISTS replication_state (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					role TEXT NOT NULL DEFAULT 'standalone',
+					primary_url TEXT DEFAULT '',
+					last_applied_id INTEGER DEFAULT 0,
+					updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+				);
+				CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
+				CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_logs(timestamp);
+			`,
+		},
+		{
+			version: 2, description: "add api_key columns (prefix, encrypted_key)",
+			sql: `
+				ALTER TABLE api_keys ADD COLUMN prefix TEXT DEFAULT '';
+				ALTER TABLE api_keys ADD COLUMN encrypted_key TEXT DEFAULT '';
+			`,
+		},
 	}
+
+	for _, m := range migrations {
+		var count int
+		err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE version = ?", m.version).Scan(&count)
+		if err != nil {
+			return fmt.Errorf("check migration %d: %w", m.version, err)
+		}
+		if count > 0 {
+			continue
+		}
+
+		if _, err := db.Exec(m.sql); err != nil {
+			if m.version == 2 && isDuplicateColumnErr(err) {
+				_, _ = db.Exec("INSERT INTO schema_migrations (version, description) VALUES (?, ?)", m.version, m.description)
+				continue
+			}
+			return fmt.Errorf("migration %d (%s): %w", m.version, m.description, err)
+		}
+
+		if _, err := db.Exec("INSERT INTO schema_migrations (version, description) VALUES (?, ?)", m.version, m.description); err != nil {
+			return fmt.Errorf("record migration %d: %w", m.version, err)
+		}
+	}
+
 	return nil
 }
 
-func isDuplicateColumn(err error) bool {
+func isDuplicateColumnErr(err error) bool {
 	return err != nil && (strings.Contains(err.Error(), "duplicate column") || strings.Contains(err.Error(), "already exists"))
 }
 

@@ -3,6 +3,7 @@ package monitor
 import (
 	"os"
 	"runtime"
+	"sort"
 	"sync"
 	"time"
 )
@@ -85,7 +86,7 @@ func (m *Monitor) Stats() Stats {
 
 		sorted := make([]time.Duration, len(lats))
 		copy(sorted, lats)
-		quickSort(sorted)
+		sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
 		p99Idx := int(float64(len(sorted)) * 0.99)
 		if p99Idx >= len(sorted) {
 			p99Idx = len(sorted) - 1
@@ -128,20 +129,4 @@ func (m *Monitor) Stats() Stats {
 	}
 }
 
-func quickSort(a []time.Duration) {
-	if len(a) < 2 {
-		return
-	}
-	left, right := 0, len(a)-1
-	pivot := len(a) / 2
-	a[pivot], a[right] = a[right], a[pivot]
-	for i := range a {
-		if a[i] < a[right] {
-			a[i], a[left] = a[left], a[i]
-			left++
-		}
-	}
-	a[left], a[right] = a[right], a[left]
-	quickSort(a[:left])
-	quickSort(a[left+1:])
-}
+
