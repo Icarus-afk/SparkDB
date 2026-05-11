@@ -3,6 +3,8 @@ package auth
 import (
 	"testing"
 	"time"
+
+	"sparkdb/internal/database"
 )
 
 func TestHashAndVerifyPassword(t *testing.T) {
@@ -179,5 +181,328 @@ func TestJWTManager_EmptySecret(t *testing.T) {
 	}
 	if claims.Username != "user" {
 		t.Errorf("Username = %q, want %q", claims.Username, "user")
+	}
+}
+
+func TestValidatePasswordStrength(t *testing.T) {
+	tests := []struct {
+		password string
+		wantErr  bool
+	}{
+		{"Abcdef1", true},
+		{"abcdefgh1", true},
+		{"ABCDEFGH1", true},
+		{"Abcdefgh", true},
+	{"Abcdef1!", false},
+	{"Abcdefgh1", false},
+	{"Password123", false},
+	{"SecurePass9", false},
+	}
+	for _, tt := range tests {
+		err := ValidatePasswordStrength(tt.password)
+		got := err != nil
+		if got != tt.wantErr {
+			t.Errorf("ValidatePasswordStrength(%q) error=%v, wantErr=%v", tt.password, err, tt.wantErr)
+		}
+	}
+}
+
+func newTestSystemDB(t *testing.T) *database.SystemDB {
+	t.Helper()
+	sys, err := database.NewSystemDB(":memory:")
+	if err != nil {
+		t.Fatalf("NewSystemDB(): %v", err)
+	}
+	return sys
+}
+
+func TestAuthenticatorCreateUser(t *testing.T) {
+	sys := newTestSystemDB(t)
+	a := NewAuthenticator(AuthenticatorConfig{SystemDB: sys, JWTSecret: "test-secret"})
+
+	user, err := a.CreateUser("newuser", "StrongPass1", "developer")
+	if err != nil {
+		t.Fatalf("CreateUser() error: %v", err)
+	}
+	if user.Username != "newuser" {
+		t.Errorf("Username = %q, want %q", user.Username, "newuser")
+	}
+	if user.Role != "developer" {
+		t.Errorf("Role = %q, want %q", user.Role, "developer")
+	}
+	if !user.PasswordChangeRequired {
+		t.Error("PasswordChangeRequired should be true for new users")
+	}
+}
+
+func TestAuthenticatorCreateUser_WeakPassword(t *testing.T) {
+	sys := newTestSystemDB(t)
+	a := NewAuthenticator(AuthenticatorConfig{SystemDB: sys, JWTSecret: "test-secret"})
+
+	_, err := a.CreateUser("weakuser", "short", "developer")
+	if err == nil {
+		t.Fatal("expected error for weak password")
+	}
+}
+
+func TestAuthenticatorCreateUser_Duplicate(t *testing.T) {
+	sys := newTestSystemDB(t)
+	a := NewAuthenticator(AuthenticatorConfig{SystemDB: sys, JWTSecret: "test-secret"})
+
+	a.CreateUser("dupuser", "StrongPass1", "developer")
+	_, err := a.CreateUser("dupuser", "OtherPass2", "developer")
+	if err == nil {
+		t.Fatal("expected error for duplicate username")
+	}
+}
+
+func TestAuthenticatorLogin(t *testing.T) {
+	sys := newTestSystemDB(t)
+	a := NewAuthenticator(AuthenticatorConfig{SystemDB: sys, JWTSecret: "test-secret"})
+
+	a.CreateUser("logintest", "StrongPass1", "admin")
+
+	resp, err := a.Login(LoginRequest{Username: "logintest", Password: "StrongPass1"}, "127.0.0.1")
+	if err != nil {
+		t.Fatalf("Login() error: %v", err)
+	}
+	if resp.Token == "" {
+		t.Fatal("token should not be empty")
+	}
+	if resp.User.Username != "logintest" {
+		t.Errorf("Username = %q, want %q", resp.User.Username, "logintest")
+	}
+	if !resp.PasswordChangeRequired {
+		t.Error("PasswordChangeRequired should be true for new users")
+	}
+}
+
+func TestAuthenticatorLogin_WrongPassword(t *testing.T) {
+	sys := newTestSystemDB(t)
+	a := NewAuthenticator(AuthenticatorConfig{SystemDB: sys, JWTSecret: "test-secret"})
+
+	a.CreateUser("wrongpw", "StrongPass1", "developer")
+	_, err := a.Login(LoginRequest{Username: "wrongpw", Password: "WrongPass1"}, "127.0.0.1")
+	if err == nil {
+		t.Fatal("expected error for wrong password")
+	}
+}
+
+func TestAuthenticatorLogin_NonexistentUser(t *testing.T) {
+	sys := newTestSystemDB(t)
+	a := NewAuthenticator(AuthenticatorConfig{SystemDB: sys, JWTSecret: "test-secret"})
+
+	_, err := a.Login(LoginRequest{Username: "nobody", Password: "StrongPass1"}, "127.0.0.1")
+	if err == nil {
+		t.Fatal("expected error for nonexistent user")
+	}
+}
+
+func TestAuthenticatorLogin_Lockout(t *testing.T) {
+	sys := newTestSystemDB(t)
+	a := NewAuthenticator(AuthenticatorConfig{
+		SystemDB:    sys,
+		JWTSecret:   "test-secret",
+		LoginLimit:  3,
+		LockoutTime: time.Minute,
+	})
+
+	a.CreateUser("lockuser", "StrongPass1", "developer")
+
+	for i := 0; i < 3; i++ {
+		a.Login(LoginRequest{Username: "lockuser", Password: "WrongPass1"}, "127.0.0.1")
+	}
+
+	_, err := a.Login(LoginRequest{Username: "lockuser", Password: "StrongPass1"}, "127.0.0.1")
+	if err == nil {
+		t.Fatal("expected lockout error after 3 failed attempts")
+	}
+}
+
+func TestAuthenticatorEnsureDefaultAdmin(t *testing.T) {
+	sys := newTestSystemDB(t)
+	a := NewAuthenticator(AuthenticatorConfig{SystemDB: sys, JWTSecret: "test-secret"})
+
+	if err := a.EnsureDefaultAdmin(); err != nil {
+		t.Fatalf("EnsureDefaultAdmin() error: %v", err)
+	}
+
+	user, err := sys.GetUserByUsername("admin")
+	if err != nil {
+		t.Fatalf("admin user not found: %v", err)
+	}
+	if user.Role != "admin" {
+		t.Errorf("Role = %q, want %q", user.Role, "admin")
+	}
+	if !user.PasswordChangeRequired {
+		t.Error("default admin should require password change")
+	}
+
+	if err := a.EnsureDefaultAdmin(); err != nil {
+		t.Fatal("EnsureDefaultAdmin() should be idempotent")
+	}
+}
+
+func TestAuthenticatorUpdateUserPassword(t *testing.T) {
+	sys := newTestSystemDB(t)
+	a := NewAuthenticator(AuthenticatorConfig{SystemDB: sys, JWTSecret: "test-secret"})
+
+	user, _ := a.CreateUser("passuser", "StrongPass1", "developer")
+
+	if err := a.UpdateUserPassword(user.ID, "NewPass123"); err != nil {
+		t.Fatalf("UpdateUserPassword() error: %v", err)
+	}
+
+	updated, _ := sys.GetUser(user.ID)
+	if !updated.PasswordChangeRequired {
+		t.Error("admin password reset should set PasswordChangeRequired")
+	}
+}
+
+func TestAuthenticatorChangeOwnPassword(t *testing.T) {
+	sys := newTestSystemDB(t)
+	a := NewAuthenticator(AuthenticatorConfig{SystemDB: sys, JWTSecret: "test-secret"})
+
+	user, _ := a.CreateUser("selfchange", "StrongPass1", "developer")
+
+	if err := a.ChangeOwnPassword(user.ID, "StrongPass1", "NewStrPass9"); err != nil {
+		t.Fatalf("ChangeOwnPassword() error: %v", err)
+	}
+
+	updated, _ := sys.GetUser(user.ID)
+	if updated.PasswordChangeRequired {
+		t.Error("own password change should clear PasswordChangeRequired")
+	}
+
+	resp, err := a.Login(LoginRequest{Username: "selfchange", Password: "NewStrPass9"}, "127.0.0.1")
+	if err != nil {
+		t.Fatalf("login with new password error: %v", err)
+	}
+	if resp.PasswordChangeRequired {
+		t.Error("login after own password change should have PasswordChangeRequired=false")
+	}
+}
+
+func TestAuthenticatorChangeOwnPassword_WrongOldPassword(t *testing.T) {
+	sys := newTestSystemDB(t)
+	a := NewAuthenticator(AuthenticatorConfig{SystemDB: sys, JWTSecret: "test-secret"})
+
+	user, _ := a.CreateUser("wrongold", "StrongPass1", "developer")
+
+	err := a.ChangeOwnPassword(user.ID, "WrongPass1", "NewStrPass9")
+	if err == nil {
+		t.Fatal("expected error for wrong old password")
+	}
+}
+
+func TestAuthenticatorChangeOwnPassword_WeakNewPassword(t *testing.T) {
+	sys := newTestSystemDB(t)
+	a := NewAuthenticator(AuthenticatorConfig{SystemDB: sys, JWTSecret: "test-secret"})
+
+	user, _ := a.CreateUser("weaknew", "StrongPass1", "developer")
+
+	err := a.ChangeOwnPassword(user.ID, "StrongPass1", "short")
+	if err == nil {
+		t.Fatal("expected error for weak new password")
+	}
+}
+
+func TestAuthenticatorEncryptDecryptRawKey(t *testing.T) {
+	a := NewAuthenticator(AuthenticatorConfig{SystemDB: newTestSystemDB(t), JWTSecret: "test-secret"})
+
+	encrypted, err := a.encryptRawKey("raw-api-key-value")
+	if err != nil {
+		t.Fatalf("encryptRawKey() error: %v", err)
+	}
+	if encrypted == "" {
+		t.Fatal("encrypted key should not be empty")
+	}
+
+	decrypted, err := a.decryptRawKey(encrypted)
+	if err != nil {
+		t.Fatalf("decryptRawKey() error: %v", err)
+	}
+	if decrypted != "raw-api-key-value" {
+		t.Errorf("decrypted = %q, want %q", decrypted, "raw-api-key-value")
+	}
+}
+
+func TestAuthenticatorApiKeyRoundTrip(t *testing.T) {
+	sys := newTestSystemDB(t)
+	a := NewAuthenticator(AuthenticatorConfig{SystemDB: sys, JWTSecret: "test-secret"})
+
+	user, _ := a.CreateUser("apiuser", "StrongPass1", "admin")
+
+	rawKey, err := a.GenerateAPIKey(user.ID, "test-key")
+	if err != nil {
+		t.Fatalf("GenerateAPIKey() error: %v", err)
+	}
+	if rawKey == "" {
+		t.Fatal("raw key should not be empty")
+	}
+
+	revealed, err := a.RevealAPIKey(1, "StrongPass1")
+	if err != nil {
+		t.Fatalf("RevealAPIKey() error: %v", err)
+	}
+	if revealed != rawKey {
+		t.Errorf("RevealAPIKey() = %q, want %q", revealed, rawKey)
+	}
+}
+
+func TestAuthenticatorRevealAPIKey_WrongPassword(t *testing.T) {
+	sys := newTestSystemDB(t)
+	a := NewAuthenticator(AuthenticatorConfig{SystemDB: sys, JWTSecret: "test-secret"})
+
+	user, _ := a.CreateUser("revealuser", "StrongPass1", "admin")
+	a.GenerateAPIKey(user.ID, "test-key")
+
+	_, err := a.RevealAPIKey(1, "WrongPass1")
+	if err == nil {
+		t.Fatal("expected error for wrong password")
+	}
+}
+
+func TestAuthenticatorLogin_RespectsLockedUntil(t *testing.T) {
+	sys := newTestSystemDB(t)
+	a := NewAuthenticator(AuthenticatorConfig{SystemDB: sys, JWTSecret: "test-secret"})
+
+	a.CreateUser("lockedacct", "StrongPass1", "developer")
+	sys.LockUser("lockedacct", 5*time.Minute)
+
+	_, err := a.Login(LoginRequest{Username: "lockedacct", Password: "StrongPass1"}, "127.0.0.1")
+	if err == nil {
+		t.Fatal("expected error for locked account")
+	}
+}
+
+func TestAuthenticatorUpdateUserRole(t *testing.T) {
+	sys := newTestSystemDB(t)
+	a := NewAuthenticator(AuthenticatorConfig{SystemDB: sys, JWTSecret: "test-secret"})
+
+	user, _ := a.CreateUser("roleuser", "StrongPass1", "developer")
+
+	updated, err := a.UpdateUserRole(user.ID, "admin")
+	if err != nil {
+		t.Fatalf("UpdateUserRole() error: %v", err)
+	}
+	if updated.Role != "admin" {
+		t.Errorf("Role = %q, want %q", updated.Role, "admin")
+	}
+}
+
+func TestAuthenticatorDeleteUser(t *testing.T) {
+	sys := newTestSystemDB(t)
+	a := NewAuthenticator(AuthenticatorConfig{SystemDB: sys, JWTSecret: "test-secret"})
+
+	user, _ := a.CreateUser("deleteuser", "StrongPass1", "developer")
+
+	if err := a.DeleteUser(user.ID); err != nil {
+		t.Fatalf("DeleteUser() error: %v", err)
+	}
+
+	_, err := sys.GetUserByUsername("deleteuser")
+	if err == nil {
+		t.Fatal("expected error for deleted user")
 	}
 }

@@ -9,6 +9,137 @@ import (
 	"testing"
 )
 
+func TestGetCipher_WithKey(t *testing.T) {
+	key := make([]byte, 32)
+	rand.Read(key)
+	hexKey := hex.EncodeToString(key)
+
+	c, err := GetCipher(hexKey, "")
+	if err != nil {
+		t.Fatalf("GetCipher() with key error: %v", err)
+	}
+	if c == nil {
+		t.Fatal("GetCipher returned nil")
+	}
+}
+
+func TestGetCipher_WithKeyFile(t *testing.T) {
+	key := make([]byte, 32)
+	rand.Read(key)
+	hexKey := hex.EncodeToString(key)
+
+	dir := t.TempDir()
+	keyFile := filepath.Join(dir, "enc.key")
+	if err := os.WriteFile(keyFile, []byte(hexKey), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	c, err := GetCipher("", keyFile)
+	if err != nil {
+		t.Fatalf("GetCipher() with key file error: %v", err)
+	}
+	if c == nil {
+		t.Fatal("GetCipher returned nil")
+	}
+}
+
+func TestGetCipher_WithEnvVar(t *testing.T) {
+	key := make([]byte, 32)
+	rand.Read(key)
+	hexKey := hex.EncodeToString(key)
+
+	oldVal := os.Getenv("SPARKDB_ENCRYPTION_KEY")
+	os.Setenv("SPARKDB_ENCRYPTION_KEY", hexKey)
+	defer os.Setenv("SPARKDB_ENCRYPTION_KEY", oldVal)
+
+	c, err := GetCipher("", "")
+	if err != nil {
+		t.Fatalf("GetCipher() with env var error: %v", err)
+	}
+	if c == nil {
+		t.Fatal("GetCipher returned nil")
+	}
+}
+
+func TestGetCipher_NoKey(t *testing.T) {
+	oldVal := os.Getenv("SPARKDB_ENCRYPTION_KEY")
+	os.Unsetenv("SPARKDB_ENCRYPTION_KEY")
+	defer os.Setenv("SPARKDB_ENCRYPTION_KEY", oldVal)
+
+	_, err := GetCipher("", "")
+	if err == nil {
+		t.Fatal("expected error when no key provided")
+	}
+}
+
+func TestGetCipher_KeyOverKeyFile(t *testing.T) {
+	key := make([]byte, 32)
+	rand.Read(key)
+	hexKey := hex.EncodeToString(key)
+
+	wrongKey := make([]byte, 32)
+	rand.Read(wrongKey)
+
+	dir := t.TempDir()
+	keyFile := filepath.Join(dir, "enc.key")
+	if err := os.WriteFile(keyFile, []byte(hex.EncodeToString(wrongKey)), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	c, err := GetCipher(hexKey, keyFile)
+	if err != nil {
+		t.Fatalf("GetCipher() error: %v", err)
+	}
+
+	plaintext := []byte("test data")
+	ciphertext, _ := c.Encrypt(plaintext)
+	decrypted, _ := c.Decrypt(ciphertext)
+	if !bytes.Equal(decrypted, plaintext) {
+		t.Fatal("key parameter should take precedence over key file")
+	}
+}
+
+func TestGetCipher_InvalidHex(t *testing.T) {
+	_, err := GetCipher("not-valid-hex", "")
+	if err == nil {
+		t.Fatal("expected error for invalid hex key")
+	}
+}
+
+func TestGetCipher_KeyFileNotFound(t *testing.T) {
+	_, err := GetCipher("", "/nonexistent/key.file")
+	if err == nil {
+		t.Fatal("expected error for nonexistent key file")
+	}
+}
+
+func TestGetCipher_KeyFileEmpty(t *testing.T) {
+	dir := t.TempDir()
+	keyFile := filepath.Join(dir, "empty.key")
+	if err := os.WriteFile(keyFile, []byte{}, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := GetCipher("", keyFile)
+	if err == nil {
+		t.Fatal("expected error for empty key file")
+	}
+}
+
+func TestDecrypt_TooShort(t *testing.T) {
+	key := make([]byte, 32)
+	rand.Read(key)
+	c, err := NewCipher(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = c.Decrypt([]byte{1, 2, 3})
+	if err == nil {
+		t.Fatal("expected error for too-short ciphertext")
+	}
+}
+
 func TestGenerateKey(t *testing.T) {
 	key, err := GenerateKey()
 	if err != nil {
