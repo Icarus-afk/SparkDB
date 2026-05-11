@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -45,17 +45,18 @@ func NewEngine(systemDB *database.SystemDB, executor *database.Executor, role, p
 
 func (e *Engine) Start() {
 	if e.role == "primary" {
-		log.Println("[replication] role: primary")
+		slog.Info("replication role: primary")
 	} else if e.role == "replica" {
-		log.Printf("[replication] role: replica, primary: %s", e.primaryURL)
+		slog.Info("replication role: replica", "primary", e.primaryURL)
 		go e.replicaLoop()
 	} else {
-		log.Println("[replication] role: standalone")
+		slog.Info("replication role: standalone")
 	}
 }
 
 func (e *Engine) Stop() {
 	close(e.stopCh)
+	slog.Info("replication engine stopped")
 }
 
 func (e *Engine) Role() string {
@@ -69,11 +70,11 @@ func (e *Engine) PrimaryURL() string {
 func (e *Engine) replicaLoop() {
 	state, err := e.systemDB.GetReplicationState()
 	if err != nil {
-		log.Printf("[replication] failed to load state: %v", err)
+		slog.Error("replication: failed to load state", "error", err)
 		return
 	}
 	lastID := state.LastAppliedID
-	log.Printf("[replication] starting from log id %d", lastID)
+	slog.Info("replication: starting", "last_applied_id", lastID)
 
 	ticker := time.NewTicker(e.pollIntvl)
 	defer ticker.Stop()
@@ -85,7 +86,7 @@ func (e *Engine) replicaLoop() {
 		case <-ticker.C:
 			e.pollOnce(&lastID)
 		case <-e.stopCh:
-			log.Println("[replication] stopping replica loop")
+			slog.Info("replication: stopping replica loop")
 			return
 		}
 	}
@@ -100,7 +101,7 @@ func (e *Engine) pollOnce(lastID *int64) {
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		log.Printf("[replication] create request: %v", err)
+		slog.Error("replication: create request", "error", err)
 		return
 	}
 	if e.apiKey != "" {
@@ -109,20 +110,20 @@ func (e *Engine) pollOnce(lastID *int64) {
 
 	resp, err := e.client.Do(req)
 	if err != nil {
-		log.Printf("[replication] poll failed: %v", err)
+		slog.Error("replication: poll failed", "error", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		log.Printf("[replication] primary returned %d: %s", resp.StatusCode, string(body))
+		slog.Error("replication: primary returned error", "status", resp.StatusCode, "body", string(body))
 		return
 	}
 
 	var result replicationLogResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		log.Printf("[replication] decode response: %v", err)
+		slog.Error("replication: decode response", "error", err)
 		return
 	}
 
@@ -132,14 +133,14 @@ func (e *Engine) pollOnce(lastID *int64) {
 
 	for _, entry := range result.Entries {
 		if err := e.applyEntry(entry); err != nil {
-			log.Printf("[replication] apply entry %d failed: %v", entry.ID, err)
+			slog.Error("replication: apply entry failed", "entry_id", entry.ID, "error", err)
 			return
 		}
 		*lastID = entry.ID
 	}
 
 	if err := e.systemDB.UpdateReplicationAppliedID(*lastID); err != nil {
-		log.Printf("[replication] update state: %v", err)
+		slog.Error("replication: update state", "error", err)
 	}
 
 	if len(result.Entries) >= 500 {

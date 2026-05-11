@@ -3,7 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -109,9 +109,7 @@ func New(cfg *config.Config) (*Server, error) {
 	mux.Handle("DELETE /admin/users/{id}", requireAuth(http.HandlerFunc(handler.HandleDeleteUser)))
 	mux.Handle("GET /admin/audit-logs", requireAuth(http.HandlerFunc(handler.HandleAuditLogs)))
 
-	mux.Handle("GET /health", optionalAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-	})))
+	mux.Handle("GET /health", optionalAuth(http.HandlerFunc(handler.HandleHealth)))
 	mux.Handle("GET /databases", requireAuth(http.HandlerFunc(handler.HandleListDatabases)))
 	mux.Handle("GET /stats", requireAuth(http.HandlerFunc(handler.HandleStats)))
 	mux.Handle("GET /metrics", optionalAuth(http.HandlerFunc(handler.HandlePrometheus)))
@@ -159,7 +157,7 @@ func New(cfg *config.Config) (*Server, error) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"message": "shutting down"})
-		log.Println("shutdown requested via API")
+		slog.Warn("shutdown requested via API")
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
@@ -189,9 +187,9 @@ func (s *Server) Start() error {
 	errCh := make(chan error, 1)
 
 	if s.tlsEnabled {
-		log.Printf("SparkDB starting on https://%s", s.httpServer.Addr)
+		slog.Info("server starting", "addr", "https://"+s.httpServer.Addr)
 	} else {
-		log.Printf("SparkDB starting on http://%s", s.httpServer.Addr)
+		slog.Info("server starting", "addr", "http://"+s.httpServer.Addr)
 	}
 
 	if s.cfg.Backup.Schedule != "" {
@@ -221,7 +219,7 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) Shutdown() {
-	log.Println("shutting down server...")
+	slog.Info("server shutting down")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	close(s.stopSched)
@@ -229,7 +227,7 @@ func (s *Server) Shutdown() {
 	s.httpServer.Shutdown(ctx)
 	s.dbManager.CloseAll()
 	s.systemDB.Close()
-	log.Println("server stopped")
+	slog.Info("server stopped")
 }
 
 func (s *Server) Authenticator() *auth.Authenticator {
@@ -239,7 +237,7 @@ func (s *Server) Authenticator() *auth.Authenticator {
 func (s *Server) scheduledBackupLoop() {
 	d, err := time.ParseDuration(s.cfg.Backup.Schedule)
 	if err != nil {
-		log.Printf("invalid backup schedule %q: %v", s.cfg.Backup.Schedule, err)
+		slog.Error("invalid backup schedule", "schedule", s.cfg.Backup.Schedule, "error", err)
 		return
 	}
 	if d < time.Minute {
@@ -249,7 +247,7 @@ func (s *Server) scheduledBackupLoop() {
 	ticker := time.NewTicker(d)
 	defer ticker.Stop()
 
-	log.Printf("scheduled backups every %s", d)
+	slog.Info("scheduled backups enabled", "interval", d)
 
 	dbNames := []string{"main"}
 
@@ -259,10 +257,10 @@ func (s *Server) scheduledBackupLoop() {
 			for _, name := range dbNames {
 				info, err := s.backupMgr.CreateBackup(name)
 				if err != nil {
-					log.Printf("scheduled backup failed for %s: %v", name, err)
+					slog.Error("scheduled backup failed", "database", name, "error", err)
 					continue
 				}
-				log.Printf("scheduled backup created: %s (%d bytes)", info.Name, info.Size)
+				slog.Info("scheduled backup created", "name", info.Name, "size", info.Size)
 			}
 
 			if s.cfg.Backup.KeepCount > 0 {
@@ -287,9 +285,9 @@ func (s *Server) pruneOldBackups() {
 	toDelete := all[s.cfg.Backup.KeepCount:]
 	for _, b := range toDelete {
 		if err := s.backupMgr.DeleteBackup(b.Path); err != nil {
-			log.Printf("failed to prune backup %s: %v", b.Name, err)
+			slog.Error("failed to prune backup", "name", b.Name, "error", err)
 		} else {
-			log.Printf("pruned old backup: %s", b.Name)
+			slog.Info("pruned old backup", "name", b.Name)
 		}
 	}
 }

@@ -83,7 +83,7 @@ func (h *Handler) HandleQuery(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	res, err := h.executor.Execute(dbName, req.Query, req.Params...)
+	res, err := h.executor.ExecuteContext(r.Context(), dbName, req.Query, req.Params...)
 	if err != nil {
 		h.logAudit(user, r, req.Query, "query_error", "failed")
 		writeJSON(w, http.StatusInternalServerError, api.ErrorResponse{Error: err.Error(), Code: 500})
@@ -154,7 +154,7 @@ func (h *Handler) HandleTransaction(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	res, err := h.executor.ExecuteTransaction(dbName, req.Queries)
+	res, err := h.executor.ExecuteTransactionContext(r.Context(), dbName, req.Queries)
 	if err != nil {
 		h.logAudit(user, r, strings.Join(req.Queries, "; "), "tx_error", "failed")
 		writeJSON(w, http.StatusInternalServerError, api.ErrorResponse{Error: err.Error(), Code: 500})
@@ -689,6 +689,27 @@ func (h *Handler) logAudit(user *auth.AuthUser, r *http.Request, query, endpoint
 		userID = &user.ID
 	}
 	h.systemDB.LogAudit(userID, username, r.RemoteAddr, query, endpoint, status)
+}
+
+func (h *Handler) HandleHealth(w http.ResponseWriter, r *http.Request) {
+	status := "ok"
+	code := http.StatusOK
+	checks := map[string]string{}
+
+	if h.systemDB != nil {
+		if err := h.systemDB.DB().Ping(); err != nil {
+			checks["database"] = "unreachable"
+			status = "degraded"
+			code = http.StatusServiceUnavailable
+		} else {
+			checks["database"] = "ok"
+		}
+	}
+
+	writeJSON(w, code, map[string]interface{}{
+		"status": status,
+		"checks": checks,
+	})
 }
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {

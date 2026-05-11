@@ -4,7 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -29,7 +29,7 @@ func NewJWTManager(secret string, duration time.Duration) *JWTManager {
 			panic("failed to generate JWT secret: " + err.Error())
 		}
 		secret = hex.EncodeToString(buf)
-		log.Println("[SECURITY] no JWT secret configured — generated ephemeral secret (tokens invalidated on restart)")
+		slog.Warn("no JWT secret configured — generated ephemeral secret (tokens invalidated on restart)")
 	}
 	if duration == 0 {
 		duration = 24 * time.Hour

@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -28,6 +29,10 @@ func (e *Executor) ListDatabases() []string {
 }
 
 func (e *Executor) Execute(dbName, query string, params ...interface{}) (*api.QueryResponse, error) {
+	return e.ExecuteContext(context.Background(), dbName, query, params...)
+}
+
+func (e *Executor) ExecuteContext(ctx context.Context, dbName, query string, params ...interface{}) (*api.QueryResponse, error) {
 	start := time.Now()
 
 	db, err := e.manager.Open(dbName)
@@ -45,9 +50,9 @@ func (e *Executor) Execute(dbName, query string, params ...interface{}) (*api.Qu
 	if strings.HasPrefix(upper, "SELECT") ||
 		strings.HasPrefix(upper, "PRAGMA") ||
 		strings.HasPrefix(upper, "EXPLAIN") {
-		res, err = e.executeQuery(db, q, start, params...)
+		res, err = e.executeQueryContext(ctx, db, q, start, params...)
 	} else {
-		res, err = e.executeExec(db, q, start, params...)
+		res, err = e.executeExecContext(ctx, db, q, start, params...)
 	}
 
 	if e.mon != nil {
@@ -57,12 +62,16 @@ func (e *Executor) Execute(dbName, query string, params ...interface{}) (*api.Qu
 }
 
 func (e *Executor) ExecuteTransaction(dbName string, queries []string) (*api.TransactionResponse, error) {
+	return e.ExecuteTransactionContext(context.Background(), dbName, queries)
+}
+
+func (e *Executor) ExecuteTransactionContext(ctx context.Context, dbName string, queries []string) (*api.TransactionResponse, error) {
 	db, err := e.manager.Open(dbName)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
 
-	tx, err := db.Begin()
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("begin transaction: %w", err)
 	}
@@ -82,9 +91,9 @@ func (e *Executor) ExecuteTransaction(dbName string, queries []string) (*api.Tra
 		if strings.HasPrefix(upper, "SELECT") ||
 			strings.HasPrefix(upper, "PRAGMA") ||
 			strings.HasPrefix(upper, "EXPLAIN") {
-			res, err = e.executeQueryTx(tx, q, start)
+			res, err = e.executeQueryTxContext(ctx, tx, q, start)
 		} else {
-			res, err = e.executeExecTx(tx, q, start)
+			res, err = e.executeExecTxContext(ctx, tx, q, start)
 		}
 		if err != nil {
 			return &api.TransactionResponse{
@@ -102,12 +111,16 @@ func (e *Executor) ExecuteTransaction(dbName string, queries []string) (*api.Tra
 }
 
 func (e *Executor) executeQuery(db *sql.DB, query string, start time.Time, params ...interface{}) (*api.QueryResponse, error) {
+	return e.executeQueryContext(context.Background(), db, query, start, params...)
+}
+
+func (e *Executor) executeQueryContext(ctx context.Context, db *sql.DB, query string, start time.Time, params ...interface{}) (*api.QueryResponse, error) {
 	var rows *sql.Rows
 	var err error
 	if len(params) > 0 {
-		rows, err = db.Query(query, params...)
+		rows, err = db.QueryContext(ctx, query, params...)
 	} else {
-		rows, err = db.Query(query)
+		rows, err = db.QueryContext(ctx, query)
 	}
 	if err != nil {
 		return &api.QueryResponse{Error: err.Error()}, nil
@@ -141,12 +154,16 @@ func (e *Executor) executeQuery(db *sql.DB, query string, start time.Time, param
 }
 
 func (e *Executor) executeExec(db *sql.DB, query string, start time.Time, params ...interface{}) (*api.QueryResponse, error) {
+	return e.executeExecContext(context.Background(), db, query, start, params...)
+}
+
+func (e *Executor) executeExecContext(ctx context.Context, db *sql.DB, query string, start time.Time, params ...interface{}) (*api.QueryResponse, error) {
 	var result sql.Result
 	var err error
 	if len(params) > 0 {
-		result, err = db.Exec(query, params...)
+		result, err = db.ExecContext(ctx, query, params...)
 	} else {
-		result, err = db.Exec(query)
+		result, err = db.ExecContext(ctx, query)
 	}
 	if err != nil {
 		return &api.QueryResponse{Error: err.Error()}, nil
@@ -163,7 +180,11 @@ func (e *Executor) executeExec(db *sql.DB, query string, start time.Time, params
 }
 
 func (e *Executor) executeQueryTx(tx *sql.Tx, query string, start time.Time) (*api.QueryResponse, error) {
-	rows, err := tx.Query(query)
+	return e.executeQueryTxContext(context.Background(), tx, query, start)
+}
+
+func (e *Executor) executeQueryTxContext(ctx context.Context, tx *sql.Tx, query string, start time.Time) (*api.QueryResponse, error) {
+	rows, err := tx.QueryContext(ctx, query)
 	if err != nil {
 		return &api.QueryResponse{Error: err.Error()}, nil
 	}
@@ -196,7 +217,11 @@ func (e *Executor) executeQueryTx(tx *sql.Tx, query string, start time.Time) (*a
 }
 
 func (e *Executor) executeExecTx(tx *sql.Tx, query string, start time.Time) (*api.QueryResponse, error) {
-	result, err := tx.Exec(query)
+	return e.executeExecTxContext(context.Background(), tx, query, start)
+}
+
+func (e *Executor) executeExecTxContext(ctx context.Context, tx *sql.Tx, query string, start time.Time) (*api.QueryResponse, error) {
+	result, err := tx.ExecContext(ctx, query)
 	if err != nil {
 		return &api.QueryResponse{Error: err.Error()}, nil
 	}
