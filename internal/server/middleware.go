@@ -7,6 +7,7 @@ import (
 
 	"sparkdb/internal/auth"
 	"sparkdb/internal/query"
+	"sparkdb/pkg/api"
 )
 
 type responseWriter struct {
@@ -33,7 +34,7 @@ func recoveryMiddleware(next http.Handler) http.Handler {
 		defer func() {
 			if err := recover(); err != nil {
 				slog.Error("panic recovered", "error", err)
-				http.Error(w, "internal server error", http.StatusInternalServerError)
+				writeJSON(w, http.StatusInternalServerError, api.ErrorResponse{Error: "internal server error", Code: 500})
 			}
 		}()
 		next.ServeHTTP(w, r)
@@ -81,15 +82,19 @@ func bodyLimitMiddleware(maxBytes int64) func(http.Handler) http.Handler {
 	}
 }
 
-func rateLimitMiddleware(limiter *query.RateLimiter) func(http.Handler) http.Handler {
+func rateLimitMiddleware(userLimiter, ipLimiter *query.RateLimiter) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !ipLimiter.Allow(r.RemoteAddr) {
+				writeJSON(w, http.StatusTooManyRequests, api.ErrorResponse{Error: "rate limit exceeded", Code: 429})
+				return
+			}
 			key := r.RemoteAddr
 			if user := auth.UserFromContext(r.Context()); user != nil {
 				key = user.Username
 			}
-			if !limiter.Allow(key) {
-				http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
+			if !userLimiter.Allow(key) {
+				writeJSON(w, http.StatusTooManyRequests, api.ErrorResponse{Error: "rate limit exceeded", Code: 429})
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -102,7 +107,7 @@ func authMiddleware(authenticator *auth.Authenticator) func(http.Handler) http.H
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			user, err := authenticator.AuthenticateRequest(r)
 			if err != nil {
-				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
+				writeJSON(w, http.StatusUnauthorized, api.ErrorResponse{Error: err.Error(), Code: 401})
 				return
 			}
 			ctx := auth.ContextWithUser(r.Context(), user)

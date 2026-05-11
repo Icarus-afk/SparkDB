@@ -12,12 +12,13 @@ type SystemDB struct {
 }
 
 type User struct {
-	ID           int64      `json:"id"`
-	Username     string     `json:"username"`
-	PasswordHash string     `json:"-"`
-	Role         string     `json:"role"`
-	CreatedAt    time.Time  `json:"created_at"`
-	LockedUntil  *time.Time `json:"locked_until,omitempty"`
+	ID                     int64      `json:"id"`
+	Username               string     `json:"username"`
+	PasswordHash           string     `json:"-"`
+	Role                   string     `json:"role"`
+	CreatedAt              time.Time  `json:"created_at"`
+	LockedUntil            *time.Time `json:"locked_until,omitempty"`
+	PasswordChangeRequired bool       `json:"-"`
 }
 
 type APIKey struct {
@@ -164,6 +165,12 @@ func migrate(db *sql.DB) error {
 				ALTER TABLE api_keys ADD COLUMN encrypted_key TEXT DEFAULT '';
 			`,
 		},
+		{
+			version: 3, description: "add password_change_required to users",
+			sql: `
+				ALTER TABLE users ADD COLUMN password_change_required INTEGER NOT NULL DEFAULT 0;
+			`,
+		},
 	}
 
 	for _, m := range migrations {
@@ -198,7 +205,7 @@ func isDuplicateColumnErr(err error) bool {
 
 func (s *SystemDB) CreateUser(username, passwordHash, role string) (*User, error) {
 	result, err := s.db.Exec(
-		"INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+		"INSERT INTO users (username, password_hash, role, password_change_required) VALUES (?, ?, ?, 1)",
 		username, passwordHash, role,
 	)
 	if err != nil {
@@ -211,38 +218,42 @@ func (s *SystemDB) CreateUser(username, passwordHash, role string) (*User, error
 
 func (s *SystemDB) GetUser(id int64) (*User, error) {
 	row := s.db.QueryRow(
-		"SELECT id, username, password_hash, role, created_at, locked_until FROM users WHERE id = ?", id,
+		"SELECT id, username, password_hash, role, created_at, locked_until, password_change_required FROM users WHERE id = ?", id,
 	)
 
 	u := &User{}
 	var lockedUntil sql.NullTime
-	if err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt, &lockedUntil); err != nil {
+	var pwdChange int
+	if err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt, &lockedUntil, &pwdChange); err != nil {
 		return nil, fmt.Errorf("get user: %w", err)
 	}
 	if lockedUntil.Valid {
 		u.LockedUntil = &lockedUntil.Time
 	}
+	u.PasswordChangeRequired = pwdChange == 1
 	return u, nil
 }
 
 func (s *SystemDB) GetUserByUsername(username string) (*User, error) {
 	row := s.db.QueryRow(
-		"SELECT id, username, password_hash, role, created_at, locked_until FROM users WHERE username = ?", username,
+		"SELECT id, username, password_hash, role, created_at, locked_until, password_change_required FROM users WHERE username = ?", username,
 	)
 
 	u := &User{}
 	var lockedUntil sql.NullTime
-	if err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt, &lockedUntil); err != nil {
+	var pwdChange int
+	if err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt, &lockedUntil, &pwdChange); err != nil {
 		return nil, fmt.Errorf("get user: %w", err)
 	}
 	if lockedUntil.Valid {
 		u.LockedUntil = &lockedUntil.Time
 	}
+	u.PasswordChangeRequired = pwdChange == 1
 	return u, nil
 }
 
 func (s *SystemDB) ListUsers() ([]*User, error) {
-	rows, err := s.db.Query("SELECT id, username, role, created_at, locked_until FROM users ORDER BY id")
+	rows, err := s.db.Query("SELECT id, username, role, created_at, locked_until, password_change_required FROM users ORDER BY id")
 	if err != nil {
 		return nil, fmt.Errorf("list users: %w", err)
 	}
@@ -252,12 +263,14 @@ func (s *SystemDB) ListUsers() ([]*User, error) {
 	for rows.Next() {
 		u := &User{}
 		var lockedUntil sql.NullTime
-		if err := rows.Scan(&u.ID, &u.Username, &u.Role, &u.CreatedAt, &lockedUntil); err != nil {
+		var pwdChange int
+		if err := rows.Scan(&u.ID, &u.Username, &u.Role, &u.CreatedAt, &lockedUntil, &pwdChange); err != nil {
 			return nil, fmt.Errorf("scan user: %w", err)
 		}
 		if lockedUntil.Valid {
 			u.LockedUntil = &lockedUntil.Time
 		}
+		u.PasswordChangeRequired = pwdChange == 1
 		users = append(users, u)
 	}
 	return users, nil
@@ -332,7 +345,16 @@ func (s *SystemDB) UpdateUserRole(id int64, role string) error {
 }
 
 func (s *SystemDB) UpdateUserPassword(id int64, passwordHash string) error {
-	_, err := s.db.Exec("UPDATE users SET password_hash = ? WHERE id = ?", passwordHash, id)
+	_, err := s.db.Exec("UPDATE users SET password_hash = ?, password_change_required = 0 WHERE id = ?", passwordHash, id)
+	return err
+}
+
+func (s *SystemDB) SetPasswordChangeRequired(id int64, required bool) error {
+	val := 0
+	if required {
+		val = 1
+	}
+	_, err := s.db.Exec("UPDATE users SET password_change_required = ? WHERE id = ?", val, id)
 	return err
 }
 

@@ -16,5 +16,7 @@ COPY --from=builder /sparkdb /sparkdb
 USER sparkdb
 EXPOSE 9600
 VOLUME ["/data", "/backups", "/etc/sparkdb"]
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+  CMD /sparkdb health || exit 1
 ENTRYPOINT ["/sparkdb"]
 CMD ["start"]

@@ -83,7 +83,8 @@ func New(cfg *config.Config) (*Server, error) {
 	handler := NewHandler(executor, authenticator, systemDB, backupMgr, mon)
 	handler.replEngine = replEngine
 
-	rateLimiter := query.NewRateLimiter(60, time.Minute)
+	userLimiter := query.NewRateLimiter(60, time.Minute)
+	ipLimiter := query.NewRateLimiter(100, time.Minute)
 	requireAuth := authMiddleware(authenticator)
 	optionalAuth := optionalAuthMiddleware(authenticator)
 
@@ -97,6 +98,7 @@ func New(cfg *config.Config) (*Server, error) {
 	mux.Handle("DELETE /backups/{name}", requireAuth(http.HandlerFunc(handler.HandleDeleteBackup)))
 
 	mux.Handle("POST /auth/login", optionalAuth(http.HandlerFunc(handler.HandleLogin)))
+	mux.Handle("PUT /auth/password", requireAuth(http.HandlerFunc(handler.HandleChangePassword)))
 	mux.Handle("POST /auth/api-keys", requireAuth(http.HandlerFunc(handler.HandleCreateAPIKey)))
 	mux.Handle("GET /auth/api-keys", requireAuth(http.HandlerFunc(handler.HandleListAPIKeys)))
 	mux.Handle("DELETE /auth/api-keys/{id}", requireAuth(http.HandlerFunc(handler.HandleDeleteAPIKey)))
@@ -122,7 +124,7 @@ func New(cfg *config.Config) (*Server, error) {
 	h = recoveryMiddleware(h)
 	h = bodyLimitMiddleware(1 << 20)(h)
 	h = corsMiddleware(cfg.Server.AllowedOrigins)(h)
-	h = rateLimitMiddleware(rateLimiter)(h)
+	h = rateLimitMiddleware(userLimiter, ipLimiter)(h)
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	httpServer := &http.Server{
@@ -156,7 +158,7 @@ func New(cfg *config.Config) (*Server, error) {
 			writeJSON(w, http.StatusForbidden, api.ErrorResponse{Error: "only admins can shutdown", Code: 403})
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]string{"message": "shutting down"})
+		writeJSON(w, http.StatusOK, api.MessageResponse{Message: "shutting down"})
 		slog.Warn("shutdown requested via API")
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

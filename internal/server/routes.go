@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"sparkdb/internal/auth"
 	"sparkdb/internal/backup"
@@ -165,6 +164,35 @@ func (h *Handler) HandleTransaction(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, res)
 }
 
+func (h *Handler) HandleChangePassword(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	if user == nil {
+		writeJSON(w, http.StatusUnauthorized, api.ErrorResponse{Error: "unauthorized", Code: 401})
+		return
+	}
+
+	var req struct {
+		OldPassword string `json:"old_password"`
+		NewPassword string `json:"new_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, api.ErrorResponse{Error: "invalid request body", Code: 400})
+		return
+	}
+
+	if req.OldPassword == "" || req.NewPassword == "" {
+		writeJSON(w, http.StatusBadRequest, api.ErrorResponse{Error: "old_password and new_password are required", Code: 400})
+		return
+	}
+
+	if err := h.authenticator.ChangeOwnPassword(user.ID, req.OldPassword, req.NewPassword); err != nil {
+		writeJSON(w, http.StatusBadRequest, api.ErrorResponse{Error: err.Error(), Code: 400})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, api.MessageResponse{Message: "password changed"})
+}
+
 func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	var req auth.LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -220,10 +248,10 @@ func (h *Handler) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, map[string]interface{}{
-		"id":       created.ID,
-		"username": created.Username,
-		"role":     created.Role,
+	writeJSON(w, http.StatusCreated, api.CreateUserResponse{
+		ID:       created.ID,
+		Username: created.Username,
+		Role:     created.Role,
 	})
 }
 
@@ -240,19 +268,12 @@ func (h *Handler) HandleListUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	type userView struct {
-		ID          int64      `json:"id"`
-		Username    string     `json:"username"`
-		Role        string     `json:"role"`
-		CreatedAt   time.Time  `json:"created_at"`
-		LockedUntil *time.Time `json:"locked_until,omitempty"`
-	}
-	view := make([]userView, 0, len(users))
+	view := make([]api.UserView, 0, len(users))
 	for _, u := range users {
-		view = append(view, userView{ID: u.ID, Username: u.Username, Role: u.Role, CreatedAt: u.CreatedAt, LockedUntil: u.LockedUntil})
+		view = append(view, api.UserView{ID: u.ID, Username: u.Username, Role: u.Role, CreatedAt: u.CreatedAt, LockedUntil: u.LockedUntil})
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{"users": view})
+	writeJSON(w, http.StatusOK, api.UsersResponse{Users: view})
 }
 
 func (h *Handler) HandleUpdateUserRole(w http.ResponseWriter, r *http.Request) {
@@ -288,10 +309,10 @@ func (h *Handler) HandleUpdateUserRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"id":       updated.ID,
-		"username": updated.Username,
-		"role":     updated.Role,
+	writeJSON(w, http.StatusOK, api.CreateUserResponse{
+		ID:       updated.ID,
+		Username: updated.Username,
+		Role:     updated.Role,
 	})
 }
 
@@ -317,8 +338,8 @@ func (h *Handler) HandleUpdateUserPassword(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if req.Password == "" {
-		writeJSON(w, http.StatusBadRequest, api.ErrorResponse{Error: "password is required", Code: 400})
+	if err := auth.ValidatePasswordStrength(req.Password); err != nil {
+		writeJSON(w, http.StatusBadRequest, api.ErrorResponse{Error: err.Error(), Code: 400})
 		return
 	}
 
@@ -327,7 +348,7 @@ func (h *Handler) HandleUpdateUserPassword(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"message": "password updated"})
+	writeJSON(w, http.StatusOK, api.MessageResponse{Message: "password updated"})
 }
 
 func (h *Handler) HandleDeleteUser(w http.ResponseWriter, r *http.Request) {
@@ -354,7 +375,7 @@ func (h *Handler) HandleDeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"message": "user deleted"})
+	writeJSON(w, http.StatusOK, api.MessageResponse{Message: "user deleted"})
 }
 
 func (h *Handler) HandleListAPIKeys(w http.ResponseWriter, r *http.Request) {
@@ -374,7 +395,11 @@ func (h *Handler) HandleListAPIKeys(w http.ResponseWriter, r *http.Request) {
 		keys = []*database.APIKey{}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{"api_keys": keys})
+	anyKeys := make([]interface{}, len(keys))
+	for i, k := range keys {
+		anyKeys[i] = k
+	}
+	writeJSON(w, http.StatusOK, api.APIKeyListResponse{APIKeys: anyKeys})
 }
 
 func (h *Handler) HandleDeleteAPIKey(w http.ResponseWriter, r *http.Request) {
@@ -401,7 +426,7 @@ func (h *Handler) HandleDeleteAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"message": "API key deleted"})
+	writeJSON(w, http.StatusOK, api.MessageResponse{Message: "API key deleted"})
 }
 
 func (h *Handler) HandleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
@@ -430,7 +455,7 @@ func (h *Handler) HandleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, map[string]string{"api_key": rawKey, "name": req.Name})
+	writeJSON(w, http.StatusCreated, api.APIKeyResponse{APIKey: rawKey, Name: req.Name})
 }
 
 func (h *Handler) HandleAuditLogs(w http.ResponseWriter, r *http.Request) {
@@ -446,7 +471,11 @@ func (h *Handler) HandleAuditLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{"logs": logs})
+	anyLogs := make([]interface{}, len(logs))
+	for i, l := range logs {
+		anyLogs[i] = l
+	}
+	writeJSON(w, http.StatusOK, api.AuditLogsResponse{Logs: anyLogs})
 }
 
 func (h *Handler) HandleBackup(w http.ResponseWriter, r *http.Request) {
@@ -504,7 +533,7 @@ func (h *Handler) HandleRestore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.logAudit(user, r, "restore:"+req.BackupFile, "/restore", "success")
-	writeJSON(w, http.StatusOK, map[string]string{"message": "restore completed", "database": req.Database})
+	writeJSON(w, http.StatusOK, api.RestoreResponse{Message: "restore completed", Database: req.Database})
 }
 
 func (h *Handler) HandleDeleteBackup(w http.ResponseWriter, r *http.Request) {
@@ -533,7 +562,7 @@ func (h *Handler) HandleDeleteBackup(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			h.logAudit(user, r, "delete_backup:"+name, "/backups/"+name, "success")
-			writeJSON(w, http.StatusOK, map[string]string{"message": "backup deleted"})
+			writeJSON(w, http.StatusOK, api.MessageResponse{Message: "backup deleted"})
 			return
 		}
 	}
@@ -573,7 +602,7 @@ func (h *Handler) HandleRevealAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"api_key": rawKey})
+	writeJSON(w, http.StatusOK, api.APIKeyResponse{APIKey: rawKey})
 }
 
 func (h *Handler) HandleReplicationLog(w http.ResponseWriter, r *http.Request) {
@@ -612,7 +641,11 @@ func (h *Handler) HandleReplicationLog(w http.ResponseWriter, r *http.Request) {
 		entries = []*database.ReplicationEntry{}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{"entries": entries})
+	anyEntries := make([]interface{}, len(entries))
+	for i, e := range entries {
+		anyEntries[i] = e
+	}
+	writeJSON(w, http.StatusOK, api.ReplicationLogResponse{Entries: anyEntries})
 }
 
 func (h *Handler) HandleListBackups(w http.ResponseWriter, r *http.Request) {
@@ -628,7 +661,11 @@ func (h *Handler) HandleListBackups(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{"backups": backups})
+	anyBackups := make([]interface{}, len(backups))
+	for i, b := range backups {
+		anyBackups[i] = b
+	}
+	writeJSON(w, http.StatusOK, api.BackupsResponse{Backups: anyBackups})
 }
 
 func (h *Handler) HandleStats(w http.ResponseWriter, r *http.Request) {
@@ -644,7 +681,7 @@ func (h *Handler) HandleStats(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) HandleListDatabases(w http.ResponseWriter, r *http.Request) {
 	databases := h.executor.ListDatabases()
-	writeJSON(w, http.StatusOK, map[string]interface{}{"databases": databases})
+	writeJSON(w, http.StatusOK, api.DatabasesResponse{Databases: databases})
 }
 
 func (h *Handler) HandlePrometheus(w http.ResponseWriter, r *http.Request) {
@@ -706,10 +743,7 @@ func (h *Handler) HandleHealth(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, code, map[string]interface{}{
-		"status": status,
-		"checks": checks,
-	})
+	writeJSON(w, code, api.HealthResponse{Status: status, Checks: checks})
 }
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {

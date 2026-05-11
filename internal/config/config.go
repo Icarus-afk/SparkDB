@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -64,12 +66,16 @@ type ReplicationConfig struct {
 func Load(path string) (*Config, error) {
 	v := viper.New()
 	v.SetConfigName("config")
-	v.SetConfigType("json")
-	v.AddConfigPath(".")
-	v.AddConfigPath("/etc/sparkdb")
 
 	if path != "" {
 		v.SetConfigFile(path)
+	} else {
+		v.SetConfigName("config")
+		v.AddConfigPath(".")
+		v.AddConfigPath("/etc/sparkdb")
+		if home, err := os.UserHomeDir(); err == nil {
+			v.AddConfigPath(filepath.Join(home, ".config", "sparkdb"))
+		}
 	}
 
 	v.SetDefault("server.host", "0.0.0.0")

@@ -76,9 +76,10 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	Token     string   `json:"token"`
-	TokenType string   `json:"token_type"`
-	User      AuthUser `json:"user"`
+	Token                  string   `json:"token"`
+	TokenType              string   `json:"token_type"`
+	User                   AuthUser `json:"user"`
+	PasswordChangeRequired bool     `json:"password_change_required"`
 }
 
 func (a *Authenticator) Login(req LoginRequest, ip string) (*LoginResponse, error) {
@@ -112,8 +113,9 @@ func (a *Authenticator) Login(req LoginRequest, ip string) (*LoginResponse, erro
 	}
 
 	return &LoginResponse{
-		Token:     token,
-		TokenType: "bearer",
+		Token:                  token,
+		TokenType:              "bearer",
+		PasswordChangeRequired: user.PasswordChangeRequired,
 		User: AuthUser{
 			ID:       user.ID,
 			Username: user.Username,
@@ -207,6 +209,9 @@ func (a *Authenticator) authenticateSession(tokenString string) (*AuthUser, erro
 }
 
 func (a *Authenticator) CreateUser(username, password, role string) (*database.User, error) {
+	if err := ValidatePasswordStrength(password); err != nil {
+		return nil, err
+	}
 	hash, err := HashPassword(password)
 	if err != nil {
 		return nil, fmt.Errorf("hash password: %w", err)
@@ -224,6 +229,28 @@ func (a *Authenticator) UpdateUserRole(id int64, role string) (*database.User, e
 
 func (a *Authenticator) UpdateUserPassword(id int64, password string) error {
 	hash, err := HashPassword(password)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+	if err := a.systemDB.UpdateUserPassword(id, hash); err != nil {
+		return err
+	}
+	return a.systemDB.SetPasswordChangeRequired(id, true)
+}
+
+func (a *Authenticator) ChangeOwnPassword(id int64, oldPassword, newPassword string) error {
+	user, err := a.systemDB.GetUser(id)
+	if err != nil {
+		return fmt.Errorf("get user: %w", err)
+	}
+	valid, err := VerifyPassword(oldPassword, user.PasswordHash)
+	if err != nil || !valid {
+		return fmt.Errorf("current password is incorrect")
+	}
+	if err := ValidatePasswordStrength(newPassword); err != nil {
+		return err
+	}
+	hash, err := HashPassword(newPassword)
 	if err != nil {
 		return fmt.Errorf("hash password: %w", err)
 	}
