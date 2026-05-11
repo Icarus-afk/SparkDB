@@ -316,6 +316,46 @@ func (h *Handler) HandleUpdateUserRole(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *Handler) HandleUpdateUsername(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	if user == nil || !rbac.HasPermission(rbac.Role(user.Role), rbac.PermCreateUser) {
+		writeJSON(w, http.StatusForbidden, api.ErrorResponse{Error: "only admins can modify users", Code: 403})
+		return
+	}
+
+	idStr := r.PathValue("id")
+	var id int64
+	if _, err := fmt.Sscanf(idStr, "%d", &id); err != nil {
+		writeJSON(w, http.StatusBadRequest, api.ErrorResponse{Error: "invalid user id", Code: 400})
+		return
+	}
+
+	var req struct {
+		Username string `json:"username"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, api.ErrorResponse{Error: "invalid request body", Code: 400})
+		return
+	}
+
+	if req.Username == "" {
+		writeJSON(w, http.StatusBadRequest, api.ErrorResponse{Error: "username is required", Code: 400})
+		return
+	}
+
+	updated, err := h.authenticator.UpdateUsername(id, req.Username)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, api.ErrorResponse{Error: err.Error(), Code: 500})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, api.CreateUserResponse{
+		ID:       updated.ID,
+		Username: updated.Username,
+		Role:     updated.Role,
+	})
+}
+
 func (h *Handler) HandleUpdateUserPassword(w http.ResponseWriter, r *http.Request) {
 	user := auth.UserFromContext(r.Context())
 	if user == nil || !rbac.HasPermission(rbac.Role(user.Role), rbac.PermCreateUser) {

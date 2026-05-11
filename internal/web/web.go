@@ -50,6 +50,7 @@ func NewHandler() http.Handler {
 			ct = "image/svg+xml"
 		}
 		w.Header().Set("Content-Type", ct)
+		w.Header().Set("Cache-Control", "no-cache, must-revalidate")
 		w.Write(data)
 	})
 }

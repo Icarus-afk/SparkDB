@@ -227,6 +227,13 @@ func (a *Authenticator) UpdateUserRole(id int64, role string) (*database.User, e
 	return a.systemDB.GetUser(id)
 }
 
+func (a *Authenticator) UpdateUsername(id int64, username string) (*database.User, error) {
+	if err := a.systemDB.UpdateUsername(id, username); err != nil {
+		return nil, fmt.Errorf("update username: %w", err)
+	}
+	return a.systemDB.GetUser(id)
+}
+
 func (a *Authenticator) UpdateUserPassword(id int64, password string) error {
 	hash, err := HashPassword(password)
 	if err != nil {

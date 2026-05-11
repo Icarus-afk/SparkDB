@@ -344,6 +344,11 @@ func (s *SystemDB) UpdateUserRole(id int64, role string) error {
 	return err
 }
 
+func (s *SystemDB) UpdateUsername(id int64, username string) error {
+	_, err := s.db.Exec("UPDATE users SET username = ? WHERE id = ?", username, id)
+	return err
+}
+
 func (s *SystemDB) UpdateUserPassword(id int64, passwordHash string) error {
 	_, err := s.db.Exec("UPDATE users SET password_hash = ?, password_change_required = 0 WHERE id = ?", passwordHash, id)
 	return err
