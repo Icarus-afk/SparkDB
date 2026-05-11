@@ -12,7 +12,9 @@ const S = {
   cols: null,
   rows: null,
   dashTimer: null,
-  expanded: {}
+  expanded: {},
+  qHistory: JSON.parse(localStorage.getItem('sparkdb_qhist') || '[]'),
+  qHistIdx: -1
 }
 
 // ===== API Client =====
@@ -313,7 +315,7 @@ function renderDashboard() {
           `<div class="sc"><div class="sc-bar sc-bar-${['blue','purple','orange','cyan','pink','red','green','blue'][i]}"></div><span class="sc-num" data-stat="${l.replace(/\s+/g,'_').toLowerCase()}">-</span><span class="sc-lbl">${l}</span></div>`
         ).join('')}
       </div>
-      <div class="card"><div class="crd-h">Database Storage</div><div id="dash-stacked"></div><div id="dash-sizes"></div></div>
+      <div class="card"><div class="crd-h">Database Storage</div><div id="dash-stacked"></div></div>
       <div class="qa-grid" style="margin-top:14px">
         <button class="qa-item" onclick="navigate('query')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="6 3 20 12 6 21 6 3"/></svg>Run a query</button>
         <button class="qa-item" onclick="navigate('import')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Import data</button>
@@ -345,14 +347,11 @@ async function loadDash() {
   })
 
   const stackedEl = $('dash-stacked')
-  const sizesEl = $('dash-sizes')
   if (!dbs.length) {
     stackedEl.innerHTML = '<div class="empty"><div class="empty-icon">&#128451;</div><div class="empty-title">No databases</div><div class="empty-desc">Create your first database to get started.</div></div>'
-    sizesEl.innerHTML = ''
     return
   }
   const total = dbs.reduce((a, d) => a + d.size, 0)
-  const max = Math.max(...dbs.map(d => d.size))
 
   if (total > 0) {
     const segments = dbs.map((d, i) => {
@@ -371,11 +370,6 @@ async function loadDash() {
   } else {
     stackedEl.innerHTML = '<p class="dim" style="padding:8px 0">No storage data</p>'
   }
-
-  sizesEl.innerHTML = dbs.map((d, i) => {
-    const pct = max ? Math.max(2, (d.size / max) * 100) : 2
-    return '<div class="db-bar-row"><span class="db-bar-name">' + esc(d.name) + '</span><div class="db-bar-track"><div class="db-bar-fill" style="width:' + pct + '%;background:linear-gradient(90deg,' + STORAGE_COLORS[i % STORAGE_COLORS.length] + ',rgba(74,108,247,.5))"></div></div><span class="db-bar-size">' + fmtBytes(d.size) + '</span></div>'
-  }).join('')
 }
 
 // ============================================================
@@ -401,6 +395,8 @@ function renderQuery() {
         <div class="q-sb">
           <div class="qsb-h">Databases <button id="q-refresh" class="btn-icon">&#x21bb;</button></div>
           <div class="q-db-list" id="q-db-list"></div>
+          <div class="qsb-h" style="margin-top:12px">History</div>
+          <div id="q-history"></div>
         </div>
         <div class="q-body">
           <div class="q-tb">
@@ -437,6 +433,7 @@ function renderQuery() {
     })
   }
   loadQDBs()
+  renderQHistory()
 }
 
 async function loadQDBs() {
@@ -526,6 +523,28 @@ async function runQuery() {
   h += '</tbody></table>'
   a.innerHTML = h
   cnt.textContent = S.rows.length + ' row(s)'; cnt.hidden = false; ex.style.display = 'flex'
+  addQueryHistory(sql)
+}
+
+function addQueryHistory(sql) {
+  S.qHistory = S.qHistory.filter(q => q !== sql).slice(0, 49)
+  S.qHistory.unshift(sql)
+  localStorage.setItem('sparkdb_qhist', JSON.stringify(S.qHistory))
+  renderQHistory()
+}
+
+function renderQHistory() {
+  const el = $('q-history')
+  if (!el) return
+  if (!S.qHistory.length) { el.innerHTML = '<span class="dim" style="padding:4px 8px;font-size:10px">(no history)</span>'; return }
+  el.innerHTML = S.qHistory.map((q, i) =>
+    '<div class="q-hist-item" onclick="restoreQuery(' + i + ')" title="' + esc(q.replace(/"/g,'&quot;')) + '">' + esc(q.length > 50 ? q.slice(0, 50) + '…' : q) + '</div>'
+  ).join('')
+}
+
+function restoreQuery(i) {
+  $('q-input').value = S.qHistory[i]
+  runQuery()
 }
 
 function clearQuery() {
@@ -607,18 +626,44 @@ async function loadDBList() {
 async function loadDBTables(db) {
   const el = $('db-tables-' + escJS(db)); if (!el) return
   const tables = await api('POST', '/query', { database: db, query: "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name" })
-  if (tables.error || !tables.rows || !tables.rows.length) { el.innerHTML = '<span class="dim">(no tables)</span>'; return }
-  let h = '<table class="tbl tbl-nested"><thead><tr><th>Table</th><th>Rows</th><th></th></tr></thead><tbody>'
-  for (const row of tables.rows) {
-    const tn = row[0]
-    const rc = await api('POST', '/query', { database: db, query: "SELECT COUNT(*) FROM " + JSON.stringify(tn) })
-    const rn = rc.rows && rc.rows[0] ? rc.rows[0][0] : '?'
-    h += '<tr><td class="mono">' + esc(tn) + '</td><td class="mono">' + rn + '</td><td class="actions">' +
-      '<button class="btn-ghost btn-xs" onclick="event.stopPropagation();doExportTable(\'' + escJS(db) + '\',\'' + escJS(tn) + '\',\'csv\')">CSV</button>' +
-      '<button class="btn-ghost btn-xs" onclick="event.stopPropagation();doExportTable(\'' + escJS(db) + '\',\'' + escJS(tn) + '\',\'json\')" style="margin-left:4px">JSON</button>' +
-      '<button class="btn-ghost btn-xs" onclick="event.stopPropagation();confirmDropTable(\'' + escJS(db) + '\',\'' + escJS(tn) + '\')" style="color:var(--danger);margin-left:4px">Drop</button></td></tr>'
+  if (tables.error || !tables.rows || !tables.rows.length) { el.innerHTML = '<span class="schema-empty">(no tables)</span>'; return }
+  const names = tables.rows.map(r => r[0])
+  const [colInfos, rowCounts] = await Promise.all([
+    Promise.all(names.map(tn => api('POST', '/query', { database: db, query: "PRAGMA table_info(" + JSON.stringify(tn) + ")" }))),
+    Promise.all(names.map(tn => api('POST', '/query', { database: db, query: "SELECT COUNT(*) FROM " + JSON.stringify(tn) })))
+  ])
+  el.innerHTML = '<div class="schema-grid">' + names.map((tn, i) => {
+    const cols = colInfos[i].rows || []
+    const rn = rowCounts[i].rows && rowCounts[i].rows[0] ? rowCounts[i].rows[0][0] : '?'
+    return buildSchemaCard(tn, cols, rn, db)
+  }).join('') + '</div>'
+}
+
+function buildSchemaCard(name, columns, rowCount, db) {
+  let colsHtml = ''
+  for (const col of columns) {
+    const colName = esc(col[1])
+    const colType = col[2] ? esc(col[2]) : 'TEXT'
+    const isPK = col[5] === 1
+    const isNN = col[3] === 1
+    const hasDef = col[4] !== null
+    colsHtml += '<div class="schema-col">' +
+      '<span class="schema-col-name">' + colName + '</span>' +
+      '<span class="schema-col-type">' + colType + '</span>' +
+      (isPK ? '<span class="schema-col-pk">PK</span>' : '') +
+      (isNN ? '<span class="schema-col-nn">NN</span>' : '') +
+      (hasDef ? '<span class="schema-col-def">DEFAULT ' + esc(String(col[4])) + '</span>' : '') +
+      '</div>'
   }
-  h += '</tbody></table>'; el.innerHTML = h
+  return '<div class="schema-card">' +
+    '<div class="schema-card-head">' +
+    '<span class="schema-card-name">' + esc(name) + '</span>' +
+    '<span class="schema-card-count">~' + rowCount + ' rows</span>' +
+    '<div class="schema-card-actions">' +
+    '<button class="btn-ghost btn-xs" onclick="event.stopPropagation();browseTable(\'' + escJS(db) + '\',\'' + escJS(name) + '\')" style="background:linear-gradient(135deg,#0EA5E9,#38BDF8);color:#fff;border:none">Edit</button>' +
+    '<button class="btn-ghost btn-xs" onclick="event.stopPropagation();doExportTable(\'' + escJS(db) + '\',\'' + escJS(name) + '\',\'csv\')">CSV</button>' +
+    '<button class="btn-ghost btn-xs" onclick="event.stopPropagation();confirmDropTable(\'' + escJS(db) + '\',\'' + escJS(name) + '\')" style="color:var(--danger)">Drop</button>' +
+    '</div></div>' + colsHtml + '</div>'
 }
 
 function toggleDB(db) {
@@ -635,6 +680,98 @@ async function doExportTable(db, table, fmt) {
   if (!r.columns || !r.columns.length) { modal('Error', '<p>Table is empty</p>', '<button class="btn btn-primary" onclick="closeModal()">OK</button>'); return }
   if (fmt === 'csv') dl(csvFormat(r.columns, r.rows || []), table + '.csv', 'text/csv')
   else dl(jsonFormat(r.columns, r.rows || [], false), table + '.json', 'application/json')
+}
+
+async function browseTable(db, table) {
+  const r = await api('POST', '/query', { database: db, query: "SELECT rowid, * FROM " + JSON.stringify(table) + " LIMIT 100" })
+  if (r.error) { modal('Error', '<p>' + esc(r.error || 'Error') + '</p>', '<button class="btn btn-primary" onclick="closeModal()">OK</button>'); return }
+  if (!r.columns || !r.columns.length) { modal('Error', '<p>Table is empty</p>', '<button class="btn btn-primary" onclick="closeModal()">OK</button>'); return }
+  const cols = r.columns, rows = r.rows || []
+  const rowidIdx = cols.indexOf('rowid')
+  let h = '<div style="font-size:12px;color:var(--text2);margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
+    '<b style="color:var(--text)">' + esc(table) + '</b> @ <span class="mono">' + esc(db) + '</span>' +
+    '<span class="dim" id="browse-count">' + Math.min(rows.length, 100) + ' rows</span>' +
+    '<span class="dim" style="font-size:10px">(click cells to edit, Enter to save, Esc to cancel)</span></div>'
+  h += '<div style="overflow-x:auto"><table class="tbl" style="font-size:11px" id="browse-table"><thead><tr>'
+  cols.forEach((c, i) => { if (c !== 'rowid') h += '<th>' + esc(c) + '</th>' })
+  h += '</tr></thead><tbody>'
+  rows.forEach((row, ri) => {
+    const rowid = rowidIdx >= 0 ? row[rowidIdx] : ri + 1
+    h += '<tr data-rowid="' + rowid + '">'
+    cols.forEach((c, i) => {
+      if (c === 'rowid') return
+      const v = row[i]
+      h += '<td class="mono editable" data-col="' + esc(c) + '" data-rowid="' + rowid + '" ' +
+        'onclick="editCell(this,\'' + escJS(db) + '\',\'' + escJS(table) + '\',' + rowid + ',\'' + escJS(c) + '\')">' +
+        (v === null ? '<span style="color:var(--text3)">NULL</span>' : esc(String(v))) + '</td>'
+    })
+    h += '</tr>'
+  })
+  h += '</tbody></table></div>'
+  modal('Browse Table', h, '<button class="btn btn-ghost" onclick="closeModal()">Close</button>')
+  qs('#modal-body').style.maxHeight = '60vh'; qs('#modal-body').style.overflowY = 'auto'
+}
+
+// ============================================================
+//  Inline Cell Editing
+// ============================================================
+function editCell(td, db, table, rowid, col) {
+  if (td.classList.contains('editing')) return
+  td.classList.add('editing')
+  const cur = td.textContent === 'NULL' || td.querySelector('span') ? '' : td.textContent
+  const val = esc(cur.replace(/"/g, '&quot;'))
+  td.innerHTML = '<div class="cell-edit-wrap">' +
+    '<input type="text" class="cell-editor" value="' + val + '" autofocus>' +
+    '<button class="cell-edit-btn cell-edit-ok" onclick="saveCell(this,\'' + escJS(db) + '\',\'' + escJS(table) + '\',' + rowid + ',\'' + escJS(col) + '\')">&#10003;</button>' +
+    '<button class="cell-edit-btn cell-edit-cancel" onclick="cancelCell(this)">&#10007;</button></div>'
+  const inp = td.querySelector('.cell-editor')
+  inp.focus(); inp.select()
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); saveCell(inp, db, table, rowid, col) }
+    else if (e.key === 'Escape') { e.preventDefault(); cancelCell(inp) }
+  })
+  // Blur saves after brief delay to let button clicks register first
+  inp.addEventListener('blur', () => {
+    setTimeout(() => { if (td.contains(inp)) saveCell(inp, db, table, rowid, col) }, 200)
+  })
+}
+
+async function saveCell(el, db, table, rowid, col) {
+  const td = el.closest('td')
+  if (!td || !td.classList.contains('editing')) return
+  const inp = td.querySelector('.cell-editor')
+  if (!inp) return
+  const val = inp.value
+  td.classList.remove('editing')
+  const quotedTable = JSON.stringify(table)
+  const quotedCol = JSON.stringify(col)
+  let query
+  if (val === '') {
+    query = 'UPDATE ' + quotedTable + ' SET ' + quotedCol + '=NULL WHERE rowid=' + rowid
+  } else if (/^-?\d+(\.\d+)?$/.test(val)) {
+    query = 'UPDATE ' + quotedTable + ' SET ' + quotedCol + '=' + val + ' WHERE rowid=' + rowid
+  } else {
+    query = 'UPDATE ' + quotedTable + ' SET ' + quotedCol + '=' + JSON.stringify(val) + ' WHERE rowid=' + rowid
+  }
+  const r = await api('POST', '/query', { database: db, query: query })
+  if (r.error) {
+    td.innerHTML = val ? esc(val) : '<span style="color:var(--text3)">NULL</span>'
+    toast('Update failed: ' + (r.error || 'Error'), 'error')
+  } else {
+    td.innerHTML = val ? esc(val) : '<span style="color:var(--text3)">NULL</span>'
+    td.classList.add('cell-saved')
+    toast('Cell updated', 'success', 1500)
+    setTimeout(() => td.classList.remove('cell-saved'), 500)
+  }
+}
+
+function cancelCell(el) {
+  const td = el.closest('td')
+  if (!td) return
+  const inp = td.querySelector('.cell-editor')
+  const val = inp ? inp.defaultValue : ''
+  td.classList.remove('editing')
+  td.innerHTML = val ? esc(val) : '<span style="color:var(--text3)">NULL</span>'
 }
 
 function confirmDropDB(db) {
