@@ -126,6 +126,73 @@ func TestGetCipher_KeyFileEmpty(t *testing.T) {
 	}
 }
 
+func TestEncryptFile_NonExistent(t *testing.T) {
+	key := make([]byte, 32)
+	rand.Read(key)
+	c, _ := NewCipher(key)
+
+	err := c.EncryptFile("/nonexistent/path/file.db")
+	if err == nil {
+		t.Fatal("expected error for nonexistent file")
+	}
+}
+
+func TestDecryptFile_NonExistent(t *testing.T) {
+	key := make([]byte, 32)
+	rand.Read(key)
+	c, _ := NewCipher(key)
+
+	err := c.DecryptFile("/nonexistent/path/file.db")
+	if err == nil {
+		t.Fatal("expected error for nonexistent file")
+	}
+}
+
+func TestEncryptCopy_NonExistentSource(t *testing.T) {
+	key := make([]byte, 32)
+	rand.Read(key)
+	c, _ := NewCipher(key)
+
+	err := c.EncryptCopy("/nonexistent/src.db", "/tmp/dst.db")
+	if err == nil {
+		t.Fatal("expected error for nonexistent source")
+	}
+}
+
+func TestDecryptCopy_NonExistentSource(t *testing.T) {
+	key := make([]byte, 32)
+	rand.Read(key)
+	c, _ := NewCipher(key)
+
+	err := c.DecryptCopy("/nonexistent/src.db", "/tmp/dst.db")
+	if err == nil {
+		t.Fatal("expected error for nonexistent source")
+	}
+}
+
+func TestEncryptReader_Empty(t *testing.T) {
+	key := make([]byte, 32)
+	rand.Read(key)
+	c, _ := NewCipher(key)
+
+	plaintext := []byte{}
+	ciphertext, err := c.EncryptReader(bytes.NewReader(plaintext))
+	if err != nil {
+		t.Fatalf("EncryptReader(empty) error: %v", err)
+	}
+	decrypted, _ := c.Decrypt(ciphertext)
+	if len(decrypted) != 0 {
+		t.Fatalf("expected empty, got %d bytes", len(decrypted))
+	}
+}
+
+func TestNewCipherFromHex_Invalid(t *testing.T) {
+	_, err := NewCipherFromHex("not-hex")
+	if err == nil {
+		t.Fatal("expected error for invalid hex")
+	}
+}
+
 func TestDecrypt_TooShort(t *testing.T) {
 	key := make([]byte, 32)
 	rand.Read(key)

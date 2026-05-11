@@ -196,6 +196,34 @@ func TestLoadTLSNoAutoCertWithFiles(t *testing.T) {
 	}
 }
 
+func TestLoadReplicationRoleEmpty(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	writeConfig(t, path, `{"replication": { "role": "" }}`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.Replication.Role != "standalone" {
+		t.Errorf("Role = %q, want standalone", cfg.Replication.Role)
+	}
+}
+
+func TestLoadPollIntervalMin(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	writeConfig(t, path, `{"replication": { "poll_interval": 0 }}`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.Replication.PollInterval < 1 {
+		t.Errorf("PollInterval = %d, want >= 1", cfg.Replication.PollInterval)
+	}
+}
+
 func TestLoadEncryptionNoKey(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")

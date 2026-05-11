@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -488,6 +489,225 @@ func TestAuthenticatorUpdateUserRole(t *testing.T) {
 	}
 	if updated.Role != "admin" {
 		t.Errorf("Role = %q, want %q", updated.Role, "admin")
+	}
+}
+
+func TestAuthenticateRequest_JWT(t *testing.T) {
+	sys := newTestSystemDB(t)
+	a := NewAuthenticator(AuthenticatorConfig{SystemDB: sys, JWTSecret: "test-secret"})
+	a.CreateUser("jwtuser", "StrongPass1", "admin")
+
+	resp, _ := a.Login(LoginRequest{Username: "jwtuser", Password: "StrongPass1"}, "127.0.0.1")
+
+	r := httptest.NewRequest("GET", "/", nil)
+	r.Header.Set("Authorization", "Bearer "+resp.Token)
+
+	user, err := a.AuthenticateRequest(r)
+	if err != nil {
+		t.Fatalf("AuthenticateRequest() error: %v", err)
+	}
+	if user.Username != "jwtuser" {
+		t.Errorf("Username = %q, want %q", user.Username, "jwtuser")
+	}
+	if user.AuthType != AuthTypeJWT {
+		t.Errorf("AuthType = %q, want %q", user.AuthType, AuthTypeJWT)
+	}
+}
+
+func TestAuthenticateRequest_APIKey(t *testing.T) {
+	sys := newTestSystemDB(t)
+	a := NewAuthenticator(AuthenticatorConfig{SystemDB: sys, JWTSecret: "test-secret"})
+	user, _ := a.CreateUser("keyuser", "StrongPass1", "admin")
+	rawKey, _ := a.GenerateAPIKey(user.ID, "test-key")
+
+	r := httptest.NewRequest("GET", "/", nil)
+	r.Header.Set("X-API-Key", rawKey)
+
+	au, err := a.AuthenticateRequest(r)
+	if err != nil {
+		t.Fatalf("AuthenticateRequest() error: %v", err)
+	}
+	if au.Username != "keyuser" {
+		t.Errorf("Username = %q, want %q", au.Username, "keyuser")
+	}
+	if au.AuthType != AuthTypeAPIKey {
+		t.Errorf("AuthType = %q, want %q", au.AuthType, AuthTypeAPIKey)
+	}
+}
+
+func TestAuthenticateRequest_Session(t *testing.T) {
+	sys := newTestSystemDB(t)
+	a := NewAuthenticator(AuthenticatorConfig{SystemDB: sys, JWTSecret: "test-secret"})
+	user, _ := a.CreateUser("sessuser", "StrongPass1", "admin")
+
+	rawToken, _, _ := a.sessionMgr.Generate(user.ID)
+
+	r := httptest.NewRequest("GET", "/", nil)
+	r.Header.Set("Authorization", "Session "+rawToken)
+
+	au, err := a.AuthenticateRequest(r)
+	if err != nil {
+		t.Fatalf("AuthenticateRequest() error: %v", err)
+	}
+	if au.Username != "sessuser" {
+		t.Errorf("Username = %q, want %q", au.Username, "sessuser")
+	}
+	if au.AuthType != AuthTypeSession {
+		t.Errorf("AuthType = %q, want %q", au.AuthType, AuthTypeSession)
+	}
+}
+
+func TestAuthenticateRequest_NoAuth(t *testing.T) {
+	sys := newTestSystemDB(t)
+	a := NewAuthenticator(AuthenticatorConfig{SystemDB: sys, JWTSecret: "test-secret"})
+
+	r := httptest.NewRequest("GET", "/", nil)
+	_, err := a.AuthenticateRequest(r)
+	if err == nil {
+		t.Fatal("expected error for no auth")
+	}
+}
+
+func TestAuthenticateRequest_InvalidBearer(t *testing.T) {
+	sys := newTestSystemDB(t)
+	a := NewAuthenticator(AuthenticatorConfig{SystemDB: sys, JWTSecret: "test-secret"})
+
+	r := httptest.NewRequest("GET", "/", nil)
+	r.Header.Set("Authorization", "Bearer invalid-token")
+	_, err := a.AuthenticateRequest(r)
+	if err == nil {
+		t.Fatal("expected error for invalid token")
+	}
+}
+
+func TestAuthenticateRequest_InvalidAuthHeader(t *testing.T) {
+	sys := newTestSystemDB(t)
+	a := NewAuthenticator(AuthenticatorConfig{SystemDB: sys, JWTSecret: "test-secret"})
+
+	r := httptest.NewRequest("GET", "/", nil)
+	r.Header.Set("Authorization", "InvalidScheme token")
+	_, err := a.AuthenticateRequest(r)
+	if err == nil {
+		t.Fatal("expected error for unsupported auth type")
+	}
+}
+
+func TestAuthenticateRequest_InvalidAPIKey(t *testing.T) {
+	sys := newTestSystemDB(t)
+	a := NewAuthenticator(AuthenticatorConfig{SystemDB: sys, JWTSecret: "test-secret"})
+
+	r := httptest.NewRequest("GET", "/", nil)
+	r.Header.Set("X-API-Key", "invalid-key")
+	_, err := a.AuthenticateRequest(r)
+	if err == nil {
+		t.Fatal("expected error for invalid API key")
+	}
+}
+
+func TestAuthenticateRequest_APIKeyLockedUser(t *testing.T) {
+	sys := newTestSystemDB(t)
+	a := NewAuthenticator(AuthenticatorConfig{SystemDB: sys, JWTSecret: "test-secret"})
+	user, _ := a.CreateUser("lockedkey", "StrongPass1", "admin")
+	rawKey, _ := a.GenerateAPIKey(user.ID, "test-key")
+	sys.LockUser("lockedkey", 5*time.Minute)
+
+	r := httptest.NewRequest("GET", "/", nil)
+	r.Header.Set("X-API-Key", rawKey)
+	_, err := a.AuthenticateRequest(r)
+	if err == nil {
+		t.Fatal("expected error for locked user")
+	}
+}
+
+func TestAuthenticateRequest_ExpiredJWT(t *testing.T) {
+	oldJWT := NewJWTManager("test-secret", -time.Hour)
+	token, _ := oldJWT.Generate(1, "expireduser", "admin")
+
+	sys := newTestSystemDB(t)
+	a := NewAuthenticator(AuthenticatorConfig{SystemDB: sys, JWTSecret: "test-secret"})
+
+	r := httptest.NewRequest("GET", "/", nil)
+	r.Header.Set("Authorization", "Bearer "+token)
+	_, err := a.AuthenticateRequest(r)
+	if err == nil {
+		t.Fatal("expected error for expired token")
+	}
+}
+
+func TestSessionManagerGenerateValidateInvalidate(t *testing.T) {
+	sys := newTestSystemDB(t)
+	sm := NewSessionManager(sys, 30*time.Minute)
+
+	rawToken, expiresAt, err := sm.Generate(42)
+	if err != nil {
+		t.Fatalf("Generate(): %v", err)
+	}
+	if rawToken == "" {
+		t.Fatal("token should not be empty")
+	}
+	if expiresAt.IsZero() {
+		t.Fatal("expiresAt should not be zero")
+	}
+
+	uid, err := sm.Validate(rawToken)
+	if err != nil {
+		t.Fatalf("Validate(): %v", err)
+	}
+	if uid != 42 {
+		t.Errorf("uid = %d, want 42", uid)
+	}
+
+	sm.Invalidate(rawToken)
+	_, err = sm.Validate(rawToken)
+	if err == nil {
+		t.Fatal("expected error after invalidation")
+	}
+}
+
+func TestSessionManagerDefaultDuration(t *testing.T) {
+	sm := NewSessionManager(nil, 0)
+	if sm == nil {
+		t.Fatal("NewSessionManager returned nil")
+	}
+	if sm.duration != 24*time.Hour {
+		t.Errorf("duration = %v, want 24h", sm.duration)
+	}
+}
+
+func TestJWTManagerCustomDuration(t *testing.T) {
+	mgr := NewJWTManager("test-secret", 30*time.Minute)
+	token, err := mgr.Generate(1, "user", "admin")
+	if err != nil {
+		t.Fatalf("Generate(): %v", err)
+	}
+	claims, err := mgr.Validate(token)
+	if err != nil {
+		t.Fatalf("Validate(): %v", err)
+	}
+	if claims.Username != "user" {
+		t.Errorf("Username = %q", claims.Username)
+	}
+}
+
+func TestLoginRateLimiterLockoutTimeout(t *testing.T) {
+	limiter := NewLoginRateLimiter(1, 50*time.Millisecond)
+	limiter.RecordFail("shortlock")
+	if !limiter.IsLocked("shortlock") {
+		t.Fatal("should be locked immediately after fail")
+	}
+	time.Sleep(60 * time.Millisecond)
+	if limiter.IsLocked("shortlock") {
+		t.Fatal("should not be locked after timeout expires")
+	}
+}
+
+func TestLoginRateLimiterRecordAfterTimeout(t *testing.T) {
+	limiter := NewLoginRateLimiter(2, 50*time.Millisecond)
+	limiter.RecordFail("timeoutkey")
+	time.Sleep(60 * time.Millisecond)
+	limiter.RecordFail("timeoutkey")
+	if limiter.IsLocked("timeoutkey") {
+		t.Fatal("should not be locked (first fail expired)")
 	}
 }
 

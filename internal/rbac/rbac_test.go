@@ -79,3 +79,9 @@ func TestValidRoles(t *testing.T) {
 		seen[r] = true
 	}
 }
+
+func TestHasPermission_UnknownRole(t *testing.T) {
+	if HasPermission("superadmin", PermQuery) {
+		t.Error("HasPermission('superadmin', PermQuery) should be false")
+	}
+}
