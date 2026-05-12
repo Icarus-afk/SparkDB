@@ -113,6 +113,7 @@ func New(cfg *config.Config) (*Server, error) {
 	mux.Handle("GET /admin/audit-logs", requireAuth(http.HandlerFunc(handler.HandleAuditLogs)))
 
 	mux.Handle("GET /health", optionalAuth(http.HandlerFunc(handler.HandleHealth)))
+	mux.Handle("POST /databases", requireAuth(http.HandlerFunc(handler.HandleCreateDatabase)))
 	mux.Handle("GET /databases", requireAuth(http.HandlerFunc(handler.HandleListDatabases)))
 	mux.Handle("GET /stats", requireAuth(http.HandlerFunc(handler.HandleStats)))
 	mux.Handle("GET /metrics", optionalAuth(http.HandlerFunc(handler.HandlePrometheus)))

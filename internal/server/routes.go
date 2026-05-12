@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"sparkdb/internal/auth"
@@ -505,7 +506,14 @@ func (h *Handler) HandleAuditLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logs, err := h.systemDB.GetAuditLogs(100)
+	limit := 100
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 5000 {
+			limit = parsed
+		}
+	}
+
+	logs, err := h.systemDB.GetAuditLogs(limit)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, api.ErrorResponse{Error: err.Error(), Code: 500})
 		return
@@ -717,6 +725,30 @@ func (h *Handler) HandleStats(w http.ResponseWriter, r *http.Request) {
 
 	stats := h.monitor.Stats()
 	writeJSON(w, http.StatusOK, stats)
+}
+
+func (h *Handler) HandleCreateDatabase(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, api.ErrorResponse{Error: "invalid request body", Code: 400})
+		return
+	}
+	if req.Name == "" {
+		writeJSON(w, http.StatusBadRequest, api.ErrorResponse{Error: "database name is required", Code: 400})
+		return
+	}
+
+	user := auth.UserFromContext(r.Context())
+	if _, err := h.executor.ExecuteContext(r.Context(), req.Name, "SELECT 1"); err != nil {
+		h.logAudit(user, r, req.Name, "create_database", "failed")
+		writeJSON(w, http.StatusInternalServerError, api.ErrorResponse{Error: err.Error(), Code: 500})
+		return
+	}
+
+	h.logAudit(user, r, req.Name, "/databases", "success")
+	writeJSON(w, http.StatusCreated, api.MessageResponse{Message: "database created"})
 }
 
 func (h *Handler) HandleListDatabases(w http.ResponseWriter, r *http.Request) {
