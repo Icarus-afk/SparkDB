@@ -311,6 +311,8 @@ func TestSystemDB_AuditLogs(t *testing.T) {
 		t.Fatalf("LogAudit(nil user): %v", err)
 	}
 
+	sys.FlushAuditLog()
+
 	logs, err := sys.GetAuditLogs(10)
 	if err != nil {
 		t.Fatalf("GetAuditLogs(): %v", err)

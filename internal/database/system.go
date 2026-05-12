@@ -7,8 +7,20 @@ import (
 	"time"
 )
 
+type auditEntry struct {
+	UserID   *int64
+	Username string
+	IP       string
+	Query    string
+	Endpoint string
+	Status   string
+	flusher  chan struct{}
+}
+
 type SystemDB struct {
-	db *sql.DB
+	db       *sql.DB
+	auditCh  chan auditEntry
+	auditDone chan struct{}
 }
 
 type User struct {
@@ -77,10 +89,18 @@ func NewSystemDB(path string) (*SystemDB, error) {
 		return nil, fmt.Errorf("migrate system db: %w", err)
 	}
 
-	return &SystemDB{db: db}, nil
+	sys := &SystemDB{
+		db:        db,
+		auditCh:   make(chan auditEntry, 1024),
+		auditDone: make(chan struct{}),
+	}
+	go sys.auditWorker()
+	return sys, nil
 }
 
 func (s *SystemDB) Close() error {
+	close(s.auditCh)
+	<-s.auditDone
 	return s.db.Close()
 }
 
@@ -417,11 +437,43 @@ func (s *SystemDB) DeleteSession(tokenHash string) error {
 }
 
 func (s *SystemDB) LogAudit(userID *int64, username, ip, query, endpoint, status string) error {
-	_, err := s.db.Exec(
+	select {
+	case s.auditCh <- auditEntry{UserID: userID, Username: username, IP: ip, Query: query, Endpoint: endpoint, Status: status}:
+	default:
+	}
+	return nil
+}
+
+func (s *SystemDB) FlushAuditLog() {
+	done := make(chan struct{})
+	select {
+	case s.auditCh <- auditEntry{Username: "", Query: "", Endpoint: "", Status: "", flusher: done}:
+		<-done
+	case <-s.auditDone:
+	}
+}
+
+func (s *SystemDB) auditWorker() {
+	stmt, err := s.db.Prepare(
 		"INSERT INTO audit_logs (user_id, username, ip_address, query, endpoint, status) VALUES (?, ?, ?, ?, ?, ?)",
-		userID, username, ip, query, endpoint, status,
 	)
-	return err
+	if err != nil {
+		close(s.auditDone)
+		return
+	}
+	defer stmt.Close()
+
+	for entry := range s.auditCh {
+		if entry.flusher != nil {
+			close(entry.flusher)
+			continue
+		}
+		_, err := stmt.Exec(entry.UserID, entry.Username, entry.IP, entry.Query, entry.Endpoint, entry.Status)
+		if err != nil {
+			// audit logging is best-effort; drop on error
+		}
+	}
+	close(s.auditDone)
 }
 
 func (s *SystemDB) GetAuditLogs(limit int) ([]*AuditLog, error) {
