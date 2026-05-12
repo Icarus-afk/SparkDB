@@ -5,13 +5,15 @@
 1. Generate a strong `SPARKDB_AUTH_JWT_SECRET` (min 32 random chars)
 2. Enable TLS with CA-signed certificates
 3. Restrict CORS origins to your application domain
-4. Change the default admin password immediately
+4. Change the default admin password immediately (or via setup wizard)
 5. Configure firewall rules to restrict access to port 9600
-6. Set up regular backups with `backup.schedule`
+6. Set up regular backups with `backup.schedule` and `backup.keep_count`
 7. Enable database encryption with `sparkdb gen-key`
 8. Use a reverse proxy (nginx, Caddy) for additional security headers
 9. Run as a non-root user (Docker does this automatically)
 10. Monitor via the `/metrics` Prometheus endpoint
+11. Enable rate limiting to prevent brute-force attacks
+12. Set `server.allowed_origins` to restrict CORS in production
 
 ## Docker Production Deployment
 
@@ -27,6 +29,13 @@ echo "SPARKDB_ENCRYPTION_KEY=$(sparkdb gen-key 2>&1)" >> .env
 # Deploy
 docker compose up -d
 ```
+
+The Docker Compose setup includes:
+- Read-only root filesystem with writable tmpfs for `/tmp`
+- Drop all Linux capabilities (`no-new-privileges:true`, `cap_drop: ALL`)
+- Non-root user inside the container
+- HEALTHCHECK using `sparkdb health` command (interval: 30s)
+- Persistent volumes for data and backups
 
 ## Reverse Proxy
 
@@ -55,7 +64,7 @@ server {
 }
 ```
 
-### systemd Service
+## systemd Service
 
 ```ini
 [Unit]
@@ -78,30 +87,40 @@ WantedBy=multi-user.target
 
 ## Backups
 
-Automated backups via cron schedule:
+Automated backups via scheduled interval:
 
 ```json
 {
   "backup": {
     "dir": "/backups",
-    "schedule": "0 2 * * *",
+    "schedule": "24h",
     "keep_count": 30
   }
 }
 ```
 
+The scheduler also automatically prunes old backups when `keep_count` is set.
+
 Manual backup:
 ```bash
 sparkdb backup main
 sparkdb list-backups
-sparkdb restore <backup-file>
+sparkdb restore <backup-file> --database main
 ```
 
 ## Monitoring
 
 Prometheus metrics at `/metrics` for:
-- Request counts and latency
+- Request counts and latency (including P99)
 - Active connections
 - Database sizes
 - Error rates
+- Failed logins
 - Replication lag (replica role)
+- Goroutine count and memory usage
+
+Health check endpoint at `/health` (no auth required):
+```bash
+curl http://localhost:9600/health
+{"status":"ok","checks":{"database":"ok"}}
+```

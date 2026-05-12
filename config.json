@@ -1,0 +1,32 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 9600
+  },
+  "database": {
+    "data_dir": "/home/lohtbrok/Documents/projects/SparkDB-Dev/SparkDB/data",
+    "wal_mode": true,
+    "max_connections": 100
+  },
+  "auth": {
+    "jwt_secret": "7fbd049a5d3c5e70db9485112e3e151fab6bc2626780f446215a269d4bc330b8"
+  },
+  "tls": {
+    "enabled": false,
+    "auto_cert": false,
+    "cert_file": "/home/lohtbrok/Documents/projects/SparkDB-Dev/SparkDB/sparkdb.crt",
+    "key_file": "/home/lohtbrok/Documents/projects/SparkDB-Dev/SparkDB/sparkdb.key"
+  },
+  "encryption": {
+    "enabled": false
+  },
+  "backup": {
+    "dir": "/home/lohtbrok/Documents/projects/SparkDB-Dev/SparkDB/backups",
+    "schedule": "",
+    "keep_count": 10
+  },
+  "replication": {
+    "role": "standalone",
+    "poll_interval": 5
+  }
+}

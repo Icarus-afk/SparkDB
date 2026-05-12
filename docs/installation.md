@@ -21,7 +21,7 @@ curl -X POST http://localhost:9600/query \
   -d '{"query": "SELECT 1", "database": "main"}'
 ```
 
-On first run, SparkDB creates a default `admin` user with password `admin`. **Change this password immediately in production.**
+On first run, SparkDB creates a default `admin` user with password `admin`. **Change this password immediately in production.** The web console shows a setup wizard on first login.
 
 ## From Source
 
@@ -96,14 +96,27 @@ docker run -d \
 docker compose up -d
 ```
 
+The Docker image:
+- Uses Alpine Linux as base
+- Runs as non-root `sparkdb` user
+- Includes a HEALTHCHECK using `sparkdb health`
+- Drops all Linux capabilities
+- Uses read-only filesystem with tmpfs for `/tmp`
+- Disables new privileges
+
 ## Makefile Targets
 
 ```bash
 make build        # Build the binary
 make install      # Build and install to /usr/local/bin
+make init         # Initialize a SparkDB project
 make run          # Build and start
 make dev          # Build and start (with info message)
 make fresh        # Clean databases and start fresh
-make test         # Run tests
+make test         # Run unit tests and integration suite
+make vet          # Run go vet
+make clean        # Remove binary and database files
 make docker-build # Build Docker image
+make docker-run   # Start Docker Compose services
+make docker-stop  # Stop Docker Compose services
 ```

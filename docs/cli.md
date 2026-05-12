@@ -7,6 +7,7 @@ sparkdb [command] [flags]
 ```
 
 Global flags:
+
 ```
 -c, --config string   path to config file
 ```
@@ -28,11 +29,21 @@ Flags:
 - `--data-dir` — database storage directory
 - `--backup-dir` — backup storage directory
 
+Creates `config.json`, `data/`, `backups/`, and optionally TLS cert/key and encryption key.
+
 ### start
 Start the database server.
 
 ```bash
 sparkdb start -c config.json
+```
+
+### health
+Check server health (useful for Docker HEALTHCHECK).
+
+```bash
+sparkdb health
+sparkdb health --url http://localhost:9600/health
 ```
 
 ### shell
@@ -62,7 +73,7 @@ sparkdb create-db myapp
 Create a database user.
 
 ```bash
-sparkdb create-user dev1 securepass developer
+sparkdb create-user dev1 Str0ngPass developer
 ```
 
 Roles: `admin`, `developer`, `readonly`, `auditor`
@@ -89,6 +100,8 @@ sparkdb encrypt --key <hex-key> file.db
 sparkdb decrypt --key <hex-key> file.db.enc
 ```
 
+Key can also be set via `SPARKDB_ENCRYPTION_KEY` environment variable.
+
 ### import
 Import data from CSV, JSON, or SQL file.
 
@@ -98,6 +111,7 @@ sparkdb import data.json
 sparkdb import schema.sql
 sparkdb import data --format csv
 sparkdb import data.csv --host remote --user admin --pass secret
+sparkdb import data.csv --db appdb
 ```
 
 ### export
@@ -109,13 +123,15 @@ sparkdb export users --format json --output users.json
 sparkdb export users --db appdb --format csv --output users.csv
 ```
 
-### backup / restore
-Create and restore backups.
+### backup / restore / list-backups
+Create, restore, and list backups.
 
 ```bash
 sparkdb backup main
-sparkdb restore main_20260509_120000.db.backup
+sparkdb backup mydb
 sparkdb list-backups
+sparkdb restore main_20260509_120000.db.backup
+sparkdb restore backup_file.db.backup --database mydb
 ```
 
 ### stop

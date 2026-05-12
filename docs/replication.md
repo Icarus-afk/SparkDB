@@ -11,6 +11,7 @@ SPARKDB_REPLICATION_ROLE=primary ./sparkdb start
 ```
 
 Or in config:
+
 ```json
 {
   "replication": {
@@ -29,6 +30,7 @@ SPARKDB_REPLICATION_ROLE=replica \
 ```
 
 Or in config:
+
 ```json
 {
   "replication": {
@@ -45,10 +47,21 @@ The replica requires an API key with admin privileges on the primary.
 ## How It Works
 
 1. The primary logs all write queries (INSERT, UPDATE, DELETE, CREATE, ALTER, DROP) to `replication_log` with an auto-incrementing ID
-2. The replica calls `GET /replication/log?since=<last_id>` to fetch new entries
+2. The replica calls `GET /replication/log?since=<last_id>&limit=<batch_size>` to fetch new entries
 3. Entries are applied sequentially to the replica's databases
 4. The replica tracks progress in a `replication_state` table
 5. SELECT and PRAGMA queries are not replicated
+
+## API
+
+### GET /replication/log
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `since` | int64 | 0 | Minimum entry ID to fetch |
+| `limit` | int64 | 500 | Max entries to return (1-5000) |
+
+Returns `{"entries": [...]}`.
 
 ## Architecture
 

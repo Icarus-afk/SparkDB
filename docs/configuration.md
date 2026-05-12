@@ -69,8 +69,8 @@ All config values can be set via environment variables with the `SPARKDB_` prefi
 | `SPARKDB_DATABASE_WAL_MODE` | Enable WAL mode (true/false) |
 | `SPARKDB_DATABASE_MAX_CONNECTIONS` | Max concurrent connections |
 | `SPARKDB_BACKUP_DIR` | Backup storage directory |
-| `SPARKDB_BACKUP_SCHEDULE` | Cron schedule for automated backups |
-| `SPARKDB_BACKUP_KEEP_COUNT` | Number of backups to retain |
+| `SPARKDB_BACKUP_SCHEDULE` | Duration between automated backups (e.g. `24h`). Also accepts cron-style with `keep_count` | 
+| `SPARKDB_BACKUP_KEEP_COUNT` | Number of backups to retain (older ones are pruned) |
 | `SPARKDB_TLS_ENABLED` | Enable TLS (true/false) |
 | `SPARKDB_TLS_AUTO_CERT` | Auto-generate self-signed cert on startup |
 | `SPARKDB_TLS_CERT_FILE` | Path to TLS certificate |
