@@ -32,7 +32,7 @@ On first run, SparkDB creates a default `admin` user with password `admin`. **Ch
 - **Encrypted API keys** — stored as AES-256-GCM ciphertext at rest
 - **Role-based access control** — admin, developer, readonly, auditor
 - **TLS support** — auto-generated or custom certificates
-- **Audit logging** — all queries and actions logged
+- **Audit logging** — all queries and actions logged (async, non-blocking)
 - **Rate limiting & account lockout** — brute-force protection
 - **Backup and restore** — on-demand and scheduled with automatic pruning
 - **Prometheus metrics** — `/metrics` endpoint with P99 latency

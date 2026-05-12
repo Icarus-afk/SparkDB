@@ -1,5 +1,11 @@
 # Security
 
+## Audit Logging
+
+All queries and actions are logged to the `audit_logs` table in the system database. Audit logging is asynchronous — entries are written to a buffered channel (capacity 1024) and flushed to disk by a background worker. If the channel is full, the entry is dropped (best-effort). This prevents audit writes from blocking request handlers under high concurrency.
+
+The audit log is accessible via the web console and `GET /admin/audit-logs` endpoint (admin/auditor role required).
+
 ## Authentication
 
 SparkDB uses Argon2id for password hashing (memory: 64MB, time: 3, threads: 4).

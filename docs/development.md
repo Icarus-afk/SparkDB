@@ -97,6 +97,16 @@ go test ./...
 ./test.sh
 ```
 
+## Stress Testing
+
+A stress test script is provided at `stress.py`. It creates worker users and fires continuous concurrent queries across multiple databases:
+
+```bash
+python3 stress.py --user admin --pass <password> --workers 32 --duration 60
+```
+
+Run with `--seed` to create test databases and data first. See `--help` for all options.
+
 The test suite covers:
 - Authentication (login, JWT, sessions, API keys, rate limiting, account lockout)
 - Query execution and transaction support with parameterized queries
